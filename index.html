@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Счёт на оплату</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root{ --bg:#fff; --fg:#222; --muted:#888; --line:#e3e3e3; --accent:#2b7de9; }
+  *{box-sizing:border-box;}
+  body{ font-family:-apple-system,Roboto,Arial,sans-serif; margin:0; padding:14px; background:var(--bg); color:var(--fg); }
+  h2{ font-size:18px; margin:0 0 12px; }
+  .fld{ margin-bottom:10px; }
+  .fld label{ display:block; font-size:12px; color:var(--muted); margin-bottom:3px; }
+  input,select{ width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:8px; font-size:15px; background:#fff; color:var(--fg); }
+  .two{ display:flex; gap:8px; } .two>.fld{ flex:1; }
+  button{ width:100%; padding:12px; border:0; border-radius:10px; background:var(--accent); color:#fff; font-size:16px; font-weight:600; margin-top:6px; }
+  button:disabled{ opacity:.5; }
+  .msg{ margin-top:10px; font-size:14px; }
+  .err{ color:#c00; } .ok{ color:#137333; }
+  .hint{ font-size:11px; color:var(--muted); margin-top:2px; }
+</style>
+</head>
+<body>
+<h2>Счёт / акт на оплату</h2>
+
+<div class="fld"><label>Контрагент</label><input id="contr" placeholder="Поставщик"></div>
+<div class="two">
+  <div class="fld"><label>Тип</label><select id="type"><option>счёт</option><option>акт</option></select></div>
+  <div class="fld"><label>№ документа</label><input id="docno"></div>
+</div>
+<div class="two">
+  <div class="fld"><label>Дата документа</label><input id="docdate" type="date"></div>
+  <div class="fld"><label>Дата оплаты</label><input id="paydate" type="date"></div>
+</div>
+<div class="fld"><label>Сумма, BYN</label><input id="sum" type="number" step="0.01" inputmode="decimal"></div>
+<div class="fld"><label>Файл (PDF / фото / docx / xlsx)</label><input id="file" type="file"><div class="hint">Скан или фото документа</div></div>
+<div class="fld"><label>Комментарий</label><input id="note"></div>
+
+<button id="send" onclick="submitForm()">Отправить на одобрение</button>
+<div class="msg" id="msg"></div>
+
+<script>
+/* ▼▼▼ ВПИШИ СЮДА свой адрес веб-приложения, заканчивается на /exec ▼▼▼ */
+var EXEC_URL = "https://script.google.com/macros/s/AKfycbxKBO433vS7HhZHYX6nzZiR8c72tjfzGagb2m7kZVfDllNuYPZajqz5DndzcRyBI7ZB/exec";
+/* ▲▲▲ это единственное, что нужно поменять в этом файле ▲▲▲ */
+
+var tg = window.Telegram ? window.Telegram.WebApp : null;
+if (tg) { tg.ready(); tg.expand(); }
+(function(){ var d=new Date(); document.getElementById('paydate').value =
+  d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })();
+
+function val(id){ return (document.getElementById(id).value||'').trim(); }
+function num(s){ return Number(String(s).replace(',','.'))||0; }
+function setMsg(t, cls){ var m=document.getElementById('msg'); m.textContent=t; m.className='msg '+(cls||''); }
+
+function submitForm(){
+  var contr=val('contr'), sum=num(val('sum'));
+  if(!contr){ setMsg('Укажите контрагента','err'); return; }
+  if(sum<=0){ setMsg('Укажите сумму','err'); return; }
+  var initData = tg ? tg.initData : '';
+  if(!initData){ setMsg('Откройте форму через бота (кнопка «Подать счёт»)','err'); return; }
+  if(EXEC_URL.indexOf('exec')<0){ setMsg('Форма не настроена: не вписан адрес сервера','err'); return; }
+
+  var p={ kind:'submit', initData:initData, contr:contr, type:val('type'), docNo:val('docno'),
+          docDateIso:val('docdate'), sum:sum, payDateIso:val('paydate'), wallet:'ООО BYN', note:val('note') };
+
+  document.getElementById('send').disabled=true; setMsg('Отправляю…');
+
+  var fi=document.getElementById('file');
+  var go=function(){
+    // text/plain — «простой» запрос, без CORS-preflight; ответ не читаем (no-cors), результат придёт сообщением от бота
+    fetch(EXEC_URL, { method:'POST', mode:'no-cors',
+        headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(p) })
+      .then(function(){
+        setMsg('Готово! Счёт отправлен. Бот пришлёт подтверждение.','ok');
+        if(tg){ setTimeout(function(){ tg.close(); }, 1500); }
+      })
+      .catch(function(){ setMsg('Сеть недоступна, попробуйте ещё раз','err'); document.getElementById('send').disabled=false; });
+  };
+  if(fi.files && fi.files[0]){
+    var f=fi.files[0];
+    if(f.size > 10*1024*1024){ setMsg('Файл больше 10 МБ — уменьшите','err'); document.getElementById('send').disabled=false; return; }
+    var rd=new FileReader();
+    rd.onload=function(){ p.fileB64=rd.result.split(',')[1]; p.fileName=f.name; p.fileMime=f.type||'application/octet-stream'; go(); };
+    rd.onerror=function(){ setMsg('Не удалось прочитать файл','err'); document.getElementById('send').disabled=false; };
+    rd.readAsDataURL(f);
+  } else go();
+}
+</script>
+</body>
+</html>
