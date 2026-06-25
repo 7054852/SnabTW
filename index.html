@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Счёт на оплату</title>
+<title>Счета на оплату</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-  :root{ --bg:#fff; --fg:#222; --muted:#888; --line:#e3e3e3; --accent:#2b7de9; }
+  :root{ --bg:#fff; --fg:#222; --muted:#888; --line:#e3e3e3; --accent:#2b7de9; --green:#137333; --red:#c00; }
   *{box-sizing:border-box;}
   body{ font-family:-apple-system,Roboto,Arial,sans-serif; margin:0; padding:14px; background:var(--bg); color:var(--fg); }
   h2{ font-size:18px; margin:0 0 12px; }
@@ -16,33 +16,57 @@
   .two{ display:flex; gap:8px; } .two>.fld{ flex:1; }
   button{ width:100%; padding:12px; border:0; border-radius:10px; background:var(--accent); color:#fff; font-size:16px; font-weight:600; margin-top:6px; }
   button:disabled{ opacity:.5; }
+  button.gray{ background:#eee; color:#333; }
+  button.green{ background:var(--green); }
+  button.redb{ background:var(--red); }
   .msg{ margin-top:10px; font-size:14px; }
-  .err{ color:#c00; } .ok{ color:#137333; }
+  .err{ color:var(--red); } .ok{ color:var(--green); }
   .hint{ font-size:11px; color:var(--muted); margin-top:2px; }
+  .card{ border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:10px; }
+  .card .top{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  .card .nm{ font-weight:600; }
+  .card .sm{ font-size:12px; color:var(--muted); margin-top:2px; }
+  .card .row2{ display:flex; gap:8px; align-items:center; margin-top:8px; }
+  .card .row2 input[type=date]{ font-size:13px; padding:6px 8px; }
+  .card .fc{ font-size:12px; font-weight:600; }
+  .card .acts{ display:flex; gap:8px; margin-top:8px; }
+  .card .acts button{ margin-top:0; padding:9px; font-size:14px; }
+  a{ color:var(--accent); }
 </style>
 </head>
 <body>
-<h2>Счёт / акт на оплату</h2>
 
-<div class="fld"><label>Контрагент</label><input id="contr" list="contrList" placeholder="Поставщик" autocomplete="off"><datalist id="contrList"></datalist></div>
-<div class="two">
-  <div class="fld"><label>Тип</label><select id="type"><option>счёт</option><option>акт</option></select></div>
-  <div class="fld"><label>№ документа</label><input id="docno"></div>
+<!-- РЕЖИМ ПОДАЧИ -->
+<div id="submitView">
+  <h2>Счёт / акт на оплату</h2>
+  <div class="fld"><label>Контрагент</label><input id="contr" list="contrList" placeholder="Поставщик" autocomplete="off"><datalist id="contrList"></datalist></div>
+  <div class="two">
+    <div class="fld"><label>Тип</label><select id="type"><option>счёт</option><option>акт</option></select></div>
+    <div class="fld"><label>№ документа</label><input id="docno"></div>
+  </div>
+  <div class="two">
+    <div class="fld"><label>Дата документа</label><input id="docdate" type="date"></div>
+    <div class="fld"><label>Дата оплаты</label><input id="paydate" type="date"></div>
+  </div>
+  <div class="fld"><label>Сумма, BYN</label><input id="sum" type="number" step="0.01" inputmode="decimal"></div>
+  <div class="fld"><label>Файл (PDF / фото / docx / xlsx)</label><input id="file" type="file"><div class="hint">Скан или фото документа</div></div>
+  <div class="fld"><label>Комментарий</label><input id="note"></div>
+  <button id="send" onclick="submitForm()">Отправить на одобрение</button>
+  <div class="msg" id="msg"></div>
 </div>
-<div class="two">
-  <div class="fld"><label>Дата документа</label><input id="docdate" type="date"></div>
-  <div class="fld"><label>Дата оплаты</label><input id="paydate" type="date"></div>
-</div>
-<div class="fld"><label>Сумма, BYN</label><input id="sum" type="number" step="0.01" inputmode="decimal"></div>
-<div class="fld"><label>Файл (PDF / фото / docx / xlsx)</label><input id="file" type="file"><div class="hint">Скан или фото документа</div></div>
-<div class="fld"><label>Комментарий</label><input id="note"></div>
 
-<button id="send" onclick="submitForm()">Отправить на одобрение</button>
-<div class="msg" id="msg"></div>
+<!-- РЕЖИМ ОДОБРЕНИЯ -->
+<div id="approveView" style="display:none;">
+  <h2>Счета на одобрении</h2>
+  <div class="hint" style="margin-bottom:8px;">Зелёным — денег на дату хватает, красным — нет (поменяйте дату оплаты).</div>
+  <div id="apList"></div>
+  <div class="msg" id="apMsg"></div>
+  <button class="gray" onclick="loadInbox()">Обновить список</button>
+</div>
 
 <iframe name="sink" id="sink" style="display:none"></iframe>
 <form id="hform" method="POST" target="sink" style="display:none">
-  <input type="hidden" name="kind" value="submit">
+  <input type="hidden" name="kind" id="h_kind" value="submit">
   <input type="hidden" name="initData" id="h_initData">
   <input type="hidden" name="contr" id="h_contr">
   <input type="hidden" name="type" id="h_type">
@@ -55,6 +79,7 @@
   <input type="hidden" name="fileB64" id="h_fileB64">
   <input type="hidden" name="fileName" id="h_fileName">
   <input type="hidden" name="fileMime" id="h_fileMime">
+  <input type="hidden" name="id" id="h_id">
 </form>
 
 <script>
@@ -63,54 +88,122 @@ var EXEC_URL = "https://script.google.com/macros/s/AKfycbxKBO433vS7HhZHYX6nzZiR8
 
 var tg = window.Telegram ? window.Telegram.WebApp : null;
 if (tg) { tg.ready(); tg.expand(); }
-(function(){ var d=new Date(); document.getElementById('paydate').value =
-  d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })();
-
-window.fillContractors = function(list){
-  var dl=document.getElementById('contrList'); dl.innerHTML='';
-  (list||[]).forEach(function(name){ var o=document.createElement('option'); o.value=name; dl.appendChild(o); });
-};
-(function(){
-  if(EXEC_URL.indexOf('exec')<0) return;
-  var s=document.createElement('script');
-  s.src=EXEC_URL+'?contractors=1&cb=fillContractors&t='+Date.now();
-  document.body.appendChild(s);
-})();
-
-function val(id){ return (document.getElementById(id).value||'').trim(); }
+function initData(){ return tg ? tg.initData : ''; }
+function val(id){ var el=document.getElementById(id); return el ? (el.value||'').trim() : ''; }
 function num(s){ return Number(String(s).replace(',','.'))||0; }
-function setMsg(t, cls){ var m=document.getElementById('msg'); m.textContent=t; m.className='msg '+(cls||''); }
+function fmt(n){ return (Number(n)||0).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function human(iso){ if(!iso) return 'без даты'; var p=iso.split('-'); return p.length===3?(p[2]+'.'+p[1]+'.'+p[0]):iso; }
 function setH(id,v){ document.getElementById('h_'+id).value=(v==null?'':v); }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+var MODE = (new URLSearchParams(location.search)).get('mode') || 'submit';
+
+if (MODE === 'approve') {
+  document.getElementById('submitView').style.display='none';
+  document.getElementById('approveView').style.display='block';
+  loadInbox();
+} else {
+  document.getElementById('approveView').style.display='none';
+  document.getElementById('submitView').style.display='block';
+  initSubmit();
+}
+
+/* ===== ПОДАЧА ===== */
+function initSubmit(){
+  var d=new Date();
+  document.getElementById('paydate').value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  window.fillContractors = function(list){
+    var dl=document.getElementById('contrList'); dl.innerHTML='';
+    (list||[]).forEach(function(name){ var o=document.createElement('option'); o.value=name; dl.appendChild(o); });
+  };
+  if(EXEC_URL.indexOf('exec')>=0){
+    var s=document.createElement('script');
+    s.src=EXEC_URL+'?contractors=1&cb=fillContractors&t='+Date.now();
+    document.body.appendChild(s);
+  }
+}
+function setMsg(t, cls){ var m=document.getElementById('msg'); m.textContent=t; m.className='msg '+(cls||''); }
 function submitForm(){
   var contr=val('contr'), sum=num(val('sum'));
   if(!contr){ setMsg('Укажите контрагента','err'); return; }
   if(sum<=0){ setMsg('Укажите сумму','err'); return; }
-  var initData = tg ? tg.initData : '';
-  if(!initData){ setMsg('Откройте форму через бота (кнопка «Подать счёт»)','err'); return; }
+  if(!initData()){ setMsg('Откройте форму через бота','err'); return; }
   if(EXEC_URL.indexOf('exec')<0){ setMsg('Форма не настроена: не вписан адрес сервера','err'); return; }
-
   document.getElementById('send').disabled=true; setMsg('Отправляю...');
-
   var post=function(){
-    setH('initData', initData);
+    setH('kind','submit'); setH('initData', initData());
     setH('contr', contr); setH('type', val('type')); setH('docNo', val('docno'));
     setH('docDateIso', val('docdate')); setH('sum', sum); setH('payDateIso', val('paydate'));
-    setH('wallet', 'ООО BYN'); setH('note', val('note'));
+    setH('wallet', 'ООО BYN'); setH('note', val('note')); setH('id','');
     var f=document.getElementById('hform'); f.action=EXEC_URL; f.submit();
     setMsg('Готово! Счёт отправлен. Бот пришлёт подтверждение.','ok');
     if(tg){ setTimeout(function(){ tg.close(); }, 1800); }
   };
-
   var fi=document.getElementById('file');
   if(fi.files && fi.files[0]){
-    var f=fi.files[0];
-    if(f.size > 8*1024*1024){ setMsg('Файл больше 8 МБ - уменьшите','err'); document.getElementById('send').disabled=false; return; }
+    var fl=fi.files[0];
+    if(fl.size > 8*1024*1024){ setMsg('Файл больше 8 МБ - уменьшите','err'); document.getElementById('send').disabled=false; return; }
     var rd=new FileReader();
-    rd.onload=function(){ setH('fileB64', rd.result.split(',')[1]); setH('fileName', f.name); setH('fileMime', f.type||'application/octet-stream'); post(); };
+    rd.onload=function(){ setH('fileB64', rd.result.split(',')[1]); setH('fileName', fl.name); setH('fileMime', fl.type||'application/octet-stream'); post(); };
     rd.onerror=function(){ setMsg('Не удалось прочитать файл','err'); document.getElementById('send').disabled=false; };
-    rd.readAsDataURL(f);
+    rd.readAsDataURL(fl);
   } else { setH('fileB64',''); setH('fileName',''); setH('fileMime',''); post(); }
+}
+
+/* ===== ОДОБРЕНИЕ ===== */
+function apMsg(t, cls){ var m=document.getElementById('apMsg'); m.textContent=t; m.className='msg '+(cls||''); }
+function loadInbox(){
+  if(EXEC_URL.indexOf('exec')<0){ apMsg('Не настроен адрес сервера','err'); return; }
+  if(!initData()){ apMsg('Откройте через бота (кнопка «Одобрить счета»)','err'); return; }
+  apMsg('Загружаю...');
+  window.onInbox = function(res){
+    if(!res || res.ok===false){ apMsg((res&&res.error)||'Ошибка загрузки','err'); return; }
+    apMsg('');
+    renderInbox(res.items||[]);
+  };
+  var s=document.createElement('script');
+  s.onerror=function(){ apMsg('Сеть недоступна','err'); };
+  s.src=EXEC_URL+'?inbox=1&cb=onInbox&initData='+encodeURIComponent(initData())+'&t='+Date.now();
+  document.body.appendChild(s);
+}
+function renderInbox(items){
+  var box=document.getElementById('apList');
+  if(!items.length){ box.innerHTML='<div class="hint">Нет счетов на одобрении.</div>'; return; }
+  box.innerHTML = items.map(function(x){
+    var col = x.enough ? 'var(--green)' : 'var(--red)';
+    var file = x.file ? '<a href="'+esc(x.file)+'" target="_blank">открыть файл</a>' : '<span class="hint">нет файла</span>';
+    return '<div class="card" id="ap_'+esc(x.id)+'">'
+      + '<div class="top"><span class="nm">'+esc(x.contr||'—')+'</span><span class="nm">'+fmt(x.sum)+'</span></div>'
+      + '<div class="sm">'+esc(x.type||'счёт')+(x.docNo?(' №'+esc(x.docNo)):'')+' · '+file+'</div>'
+      + '<div class="row2"><span class="hint">оплатить:</span>'
+        + '<input type="date" id="apd_'+esc(x.id)+'" value="'+esc(x.payDateIso||'')+'">'
+        + '<span class="fc" style="color:'+col+';">остаток: '+fmt(x.afterPay)+'</span></div>'
+      + '<div class="acts">'
+        + '<button class="green" onclick="approve(\''+esc(x.id)+'\')">Одобрить</button>'
+        + '<button class="redb" onclick="reject(\''+esc(x.id)+'\')">Отклонить</button></div>'
+      + '</div>';
+  }).join('');
+}
+function sendAction(kind, id){
+  setH('kind', kind); setH('initData', initData()); setH('id', id);
+  setH('payDateIso', kind==='approve' ? (val('apd_'+id)||'') : '');
+  setH('wallet','ООО BYN');
+  // очистим поля подачи, чтобы не слать лишнее
+  ['contr','type','docNo','docDateIso','sum','note','fileB64','fileName','fileMime'].forEach(function(f){ setH(f,''); });
+  var f=document.getElementById('hform'); f.action=EXEC_URL; f.submit();
+}
+function approve(id){
+  apMsg('Одобряю...');
+  sendAction('approve', id);
+  var card=document.getElementById('ap_'+id); if(card) card.style.opacity='0.4';
+  setTimeout(loadInbox, 1500);
+}
+function reject(id){
+  if(!confirm('Отклонить счёт?'))return;
+  apMsg('Отклоняю...');
+  sendAction('reject', id);
+  var card=document.getElementById('ap_'+id); if(card) card.style.opacity='0.4';
+  setTimeout(loadInbox, 1500);
 }
 </script>
 </body>
