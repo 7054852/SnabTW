@@ -22,6 +22,7 @@
   .msg{ margin-top:10px; font-size:14px; }
   .err{ color:var(--red); } .ok{ color:var(--green); }
   .hint{ font-size:11px; color:var(--muted); margin-top:2px; }
+  .back{ font-size:13px; color:var(--accent); cursor:pointer; margin-bottom:8px; display:inline-block; }
   .card{ border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:10px; }
   .card .top{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
   .card .nm{ font-weight:600; }
@@ -36,8 +37,17 @@
 </head>
 <body>
 
-<!-- РЕЖИМ ПОДАЧИ -->
-<div id="submitView">
+<!-- РАЗВИЛКА -->
+<div id="menuView" style="display:none;">
+  <h2>Счета на оплату</h2>
+  <button onclick="showSubmit()">📄 Подать счёт</button>
+  <button class="green" id="btnApprove" onclick="showApprove()" style="display:none;">✅ Одобрить счета</button>
+  <div class="msg" id="menuMsg"></div>
+</div>
+
+<!-- ПОДАЧА -->
+<div id="submitView" style="display:none;">
+  <span class="back" id="subBack" onclick="showMenu()" style="display:none;">‹ назад</span>
   <h2>Счёт / акт на оплату</h2>
   <div class="fld"><label>Контрагент</label><input id="contr" list="contrList" placeholder="Поставщик" autocomplete="off"><datalist id="contrList"></datalist></div>
   <div class="two">
@@ -55,8 +65,9 @@
   <div class="msg" id="msg"></div>
 </div>
 
-<!-- РЕЖИМ ОДОБРЕНИЯ -->
+<!-- ОДОБРЕНИЕ -->
 <div id="approveView" style="display:none;">
+  <span class="back" onclick="showMenu()">‹ назад</span>
   <h2>Счета на одобрении</h2>
   <div class="hint" style="margin-bottom:8px;">Зелёным — денег на дату хватает, красным — нет (поменяйте дату оплаты).</div>
   <div id="apList"></div>
@@ -92,26 +103,48 @@ function initData(){ return tg ? tg.initData : ''; }
 function val(id){ var el=document.getElementById(id); return el ? (el.value||'').trim() : ''; }
 function num(s){ return Number(String(s).replace(',','.'))||0; }
 function fmt(n){ return (Number(n)||0).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function human(iso){ if(!iso) return 'без даты'; var p=iso.split('-'); return p.length===3?(p[2]+'.'+p[1]+'.'+p[0]):iso; }
 function setH(id,v){ document.getElementById('h_'+id).value=(v==null?'':v); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function show(id){ ['menuView','submitView','approveView'].forEach(function(v){ document.getElementById(v).style.display = (v===id?'block':'none'); }); }
 
-var MODE = (new URLSearchParams(location.search)).get('mode') || 'submit';
+var ROLE = { canSubmit:false, canApprove:false };
 
-if (MODE === 'approve') {
-  document.getElementById('submitView').style.display='none';
-  document.getElementById('approveView').style.display='block';
-  loadInbox();
-} else {
-  document.getElementById('approveView').style.display='none';
-  document.getElementById('submitView').style.display='block';
-  initSubmit();
-}
+// старт: узнаём роль и решаем, что показать
+(function start(){
+  if(EXEC_URL.indexOf('exec')<0){ show('submitView'); initSubmit(); return; }
+  if(!initData()){ show('submitView'); initSubmit(); return; }   // вне Telegram — просто форма (подача всё равно потребует подпись)
+  window.onRole = function(r){
+    if(r && r.ok){
+      ROLE.canSubmit = !!r.canSubmit; ROLE.canApprove = !!r.canApprove;
+      if(ROLE.canApprove){
+        // директор — показываем развилку
+        document.getElementById('btnApprove').style.display='block';
+        document.getElementById('subBack').style.display='inline-block';
+        show('menuView');
+      } else {
+        // закупщик — сразу форма подачи
+        show('submitView'); initSubmit();
+      }
+    } else {
+      show('submitView'); initSubmit();
+    }
+  };
+  var s=document.createElement('script');
+  s.onerror=function(){ show('submitView'); initSubmit(); };
+  s.src=EXEC_URL+'?role=1&cb=onRole&initData='+encodeURIComponent(initData())+'&t='+Date.now();
+  document.body.appendChild(s);
+})();
+
+function showMenu(){ show('menuView'); }
+function showSubmit(){ show('submitView'); initSubmit(); }
+function showApprove(){ show('approveView'); loadInbox(); }
 
 /* ===== ПОДАЧА ===== */
+var submitInited=false;
 function initSubmit(){
   var d=new Date();
   document.getElementById('paydate').value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  if(submitInited) return; submitInited=true;
   window.fillContractors = function(list){
     var dl=document.getElementById('contrList'); dl.innerHTML='';
     (list||[]).forEach(function(name){ var o=document.createElement('option'); o.value=name; dl.appendChild(o); });
@@ -154,7 +187,7 @@ function submitForm(){
 function apMsg(t, cls){ var m=document.getElementById('apMsg'); m.textContent=t; m.className='msg '+(cls||''); }
 function loadInbox(){
   if(EXEC_URL.indexOf('exec')<0){ apMsg('Не настроен адрес сервера','err'); return; }
-  if(!initData()){ apMsg('Откройте через бота (кнопка «Одобрить счета»)','err'); return; }
+  if(!initData()){ apMsg('Откройте через бота','err'); return; }
   apMsg('Загружаю...');
   window.onInbox = function(res){
     if(!res || res.ok===false){ apMsg((res&&res.error)||'Ошибка загрузки','err'); return; }
@@ -188,20 +221,17 @@ function sendAction(kind, id){
   setH('kind', kind); setH('initData', initData()); setH('id', id);
   setH('payDateIso', kind==='approve' ? (val('apd_'+id)||'') : '');
   setH('wallet','ООО BYN');
-  // очистим поля подачи, чтобы не слать лишнее
   ['contr','type','docNo','docDateIso','sum','note','fileB64','fileName','fileMime'].forEach(function(f){ setH(f,''); });
   var f=document.getElementById('hform'); f.action=EXEC_URL; f.submit();
 }
 function approve(id){
-  apMsg('Одобряю...');
-  sendAction('approve', id);
+  apMsg('Одобряю...'); sendAction('approve', id);
   var card=document.getElementById('ap_'+id); if(card) card.style.opacity='0.4';
   setTimeout(loadInbox, 1500);
 }
 function reject(id){
   if(!confirm('Отклонить счёт?'))return;
-  apMsg('Отклоняю...');
-  sendAction('reject', id);
+  apMsg('Отклоняю...'); sendAction('reject', id);
   var card=document.getElementById('ap_'+id); if(card) card.style.opacity='0.4';
   setTimeout(loadInbox, 1500);
 }
