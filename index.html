@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Счета на оплату</title>
+<title>Финансы — заявки</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-  :root{ --bg:#fff; --fg:#222; --muted:#888; --line:#e3e3e3; --accent:#2b7de9; --green:#137333; --red:#c00; }
+  :root{ --bg:#fff; --fg:#222; --muted:#888; --line:#e3e3e3; --accent:#2b7de9; --green:#137333; --red:#c00; --gold:#b8860b; }
   *{box-sizing:border-box;}
   body{ font-family:-apple-system,Roboto,Arial,sans-serif; margin:0; padding:14px; background:var(--bg); color:var(--fg); }
   h2{ font-size:18px; margin:0 0 12px; }
@@ -16,11 +16,8 @@
   .two{ display:flex; gap:8px; } .two>.fld{ flex:1; }
   button{ width:100%; padding:12px; border:0; border-radius:10px; background:var(--accent); color:#fff; font-size:16px; font-weight:600; margin-top:6px; }
   button:disabled{ opacity:.5; }
-  button.gray{ background:#eee; color:#333; }
-  button.green{ background:var(--green); }
-  button.redb{ background:var(--red); }
-  .msg{ margin-top:10px; font-size:14px; }
-  .err{ color:var(--red); } .ok{ color:var(--green); }
+  button.gray{ background:#eee; color:#333; } button.green{ background:var(--green); } button.gold{ background:var(--gold); } button.redb{ background:var(--red); }
+  .msg{ margin-top:10px; font-size:14px; } .err{ color:var(--red); } .ok{ color:var(--green); }
   .hint{ font-size:11px; color:var(--muted); margin-top:2px; }
   .back{ font-size:13px; color:var(--accent); cursor:pointer; margin-bottom:8px; display:inline-block; }
   .card{ border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:10px; }
@@ -39,15 +36,18 @@
 
 <!-- РАЗВИЛКА -->
 <div id="menuView" style="display:none;">
-  <h2>Счета на оплату</h2>
-  <button onclick="showSubmit()">📄 Подать счёт</button>
-  <button class="green" id="btnApprove" onclick="showApprove()" style="display:none;">✅ Одобрить счета</button>
+  <h2>Финансы — заявки</h2>
+  <button onclick="showSubmit()">📄 Подать счёт на оплату</button>
+  <button class="gold" onclick="showCash()">💵 Наличный отчёт</button>
+  <button class="green" id="btnApproveInv" onclick="showApprove()" style="display:none;">✅ Одобрить счета</button>
+  <button class="green" id="btnApproveCash" onclick="showCashApprove()" style="display:none;">✅ Наличные отчёты</button>
+  <button class="gray" id="btnMine" onclick="showMine()" style="display:none;">🗑 Мои отчёты (удалить)</button>
   <div class="msg" id="menuMsg"></div>
 </div>
 
-<!-- ПОДАЧА -->
+<!-- ПОДАЧА СЧЁТА -->
 <div id="submitView" style="display:none;">
-  <span class="back" id="subBack" onclick="showMenu()" style="display:none;">‹ назад</span>
+  <span class="back" onclick="showMenu()">‹ назад</span>
   <h2>Счёт / акт на оплату</h2>
   <div class="fld"><label>Контрагент</label><input id="contr" list="contrList" placeholder="Поставщик" autocomplete="off"><datalist id="contrList"></datalist></div>
   <div class="two">
@@ -59,37 +59,67 @@
     <div class="fld"><label>Дата оплаты</label><input id="paydate" type="date"></div>
   </div>
   <div class="fld"><label>Сумма, BYN</label><input id="sum" type="number" step="0.01" inputmode="decimal"></div>
-  <div class="fld"><label>Файл (PDF / фото / docx / xlsx)</label><input id="file" type="file"><div class="hint">Скан или фото документа</div></div>
+  <div class="fld"><label>Файл (PDF / фото / docx / xlsx)</label><input id="file" type="file"></div>
   <div class="fld"><label>Комментарий</label><input id="note"></div>
   <button id="send" onclick="submitForm()">Отправить на одобрение</button>
   <div class="msg" id="msg"></div>
 </div>
 
-<!-- ОДОБРЕНИЕ -->
+<!-- НАЛИЧНЫЙ ОТЧЁТ -->
+<div id="cashView" style="display:none;">
+  <span class="back" onclick="showMenu()">‹ назад</span>
+  <h2>Наличный отчёт</h2>
+  <div class="hint" id="cashHint" style="margin-bottom:8px;"></div>
+  <div class="two">
+    <div class="fld"><label>Сумма, BYN</label><input id="c_sum" type="number" step="0.01" inputmode="decimal"></div>
+    <div class="fld"><label>Категория</label><select id="c_cat"><option></option></select></div>
+  </div>
+  <div class="fld"><label>Наличный кошелёк</label><select id="c_wallet"><option></option></select></div>
+  <div class="fld"><label>На что (назначение)</label><input id="c_name" placeholder="напр. хоз-нужды"></div>
+  <div class="fld"><label>Чек (фото / PDF) — если есть</label><input id="c_file" type="file"></div>
+  <div class="fld"><label>Комментарий</label><input id="c_note"></div>
+  <button id="c_send" class="gold" onclick="cashSubmit()">Отправить</button>
+  <div class="msg" id="cMsg"></div>
+</div>
+
+<!-- ОДОБРЕНИЕ СЧЕТОВ -->
 <div id="approveView" style="display:none;">
   <span class="back" onclick="showMenu()">‹ назад</span>
   <h2>Счета на одобрении</h2>
-  <div class="hint" style="margin-bottom:8px;">Зелёным — денег на дату хватает, красным — нет (поменяйте дату оплаты).</div>
-  <div id="apList"></div>
-  <div class="msg" id="apMsg"></div>
+  <div class="hint" style="margin-bottom:8px;">Зелёным — денег на дату хватает, красным — нет.</div>
+  <div id="apList"></div><div class="msg" id="apMsg"></div>
   <button class="gray" onclick="loadInbox()">Обновить список</button>
+</div>
+
+<!-- ПОДТВЕРЖДЕНИЕ НАЛИЧНЫХ -->
+<div id="cashApproveView" style="display:none;">
+  <span class="back" onclick="showMenu()">‹ назад</span>
+  <h2>Наличные отчёты</h2>
+  <div class="hint" style="margin-bottom:8px;">Подтвердишь — создастся наличный расход.</div>
+  <div id="caList"></div><div class="msg" id="caMsg"></div>
+  <button class="gray" onclick="loadCashApprove()">Обновить список</button>
+</div>
+
+<!-- МОИ ОТЧЁТЫ -->
+<div id="mineView" style="display:none;">
+  <span class="back" onclick="showMenu()">‹ назад</span>
+  <h2>Мои отчёты на подтверждении</h2>
+  <div class="hint" style="margin-bottom:8px;">Ошиблись — удалите и подайте заново.</div>
+  <div id="myList"></div><div class="msg" id="myMsg"></div>
+  <button class="gray" onclick="loadMine()">Обновить</button>
 </div>
 
 <iframe name="sink" id="sink" style="display:none"></iframe>
 <form id="hform" method="POST" target="sink" style="display:none">
-  <input type="hidden" name="kind" id="h_kind" value="submit">
+  <input type="hidden" name="kind" id="h_kind">
   <input type="hidden" name="initData" id="h_initData">
-  <input type="hidden" name="contr" id="h_contr">
-  <input type="hidden" name="type" id="h_type">
-  <input type="hidden" name="docNo" id="h_docNo">
-  <input type="hidden" name="docDateIso" id="h_docDateIso">
-  <input type="hidden" name="sum" id="h_sum">
-  <input type="hidden" name="payDateIso" id="h_payDateIso">
-  <input type="hidden" name="wallet" id="h_wallet" value="ООО BYN">
-  <input type="hidden" name="note" id="h_note">
-  <input type="hidden" name="fileB64" id="h_fileB64">
-  <input type="hidden" name="fileName" id="h_fileName">
-  <input type="hidden" name="fileMime" id="h_fileMime">
+  <input type="hidden" name="contr" id="h_contr"><input type="hidden" name="type" id="h_type">
+  <input type="hidden" name="docNo" id="h_docNo"><input type="hidden" name="docDateIso" id="h_docDateIso">
+  <input type="hidden" name="sum" id="h_sum"><input type="hidden" name="payDateIso" id="h_payDateIso">
+  <input type="hidden" name="wallet" id="h_wallet"><input type="hidden" name="note" id="h_note">
+  <input type="hidden" name="cat" id="h_cat"><input type="hidden" name="name" id="h_name">
+  <input type="hidden" name="reimburse" id="h_reimburse"><input type="hidden" name="spender" id="h_spender">
+  <input type="hidden" name="fileB64" id="h_fileB64"><input type="hidden" name="fileName" id="h_fileName"><input type="hidden" name="fileMime" id="h_fileMime">
   <input type="hidden" name="id" id="h_id">
 </form>
 
@@ -103,31 +133,25 @@ function initData(){ return tg ? tg.initData : ''; }
 function val(id){ var el=document.getElementById(id); return el ? (el.value||'').trim() : ''; }
 function num(s){ return Number(String(s).replace(',','.'))||0; }
 function fmt(n){ return (Number(n)||0).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function human(iso){ if(!iso) return ''; var p=iso.split('-'); return p.length===3?(p[2]+'.'+p[1]+'.'+p[0]):iso; }
 function setH(id,v){ document.getElementById('h_'+id).value=(v==null?'':v); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function show(id){ ['menuView','submitView','approveView'].forEach(function(v){ document.getElementById(v).style.display = (v===id?'block':'none'); }); }
+var VIEWS=['menuView','submitView','cashView','approveView','cashApproveView','mineView'];
+function show(id){ VIEWS.forEach(function(v){ document.getElementById(v).style.display=(v===id?'block':'none'); }); }
 
-var ROLE = { canSubmit:false, canApprove:false };
-
-// старт: узнаём роль и решаем, что показать
+var ROLE={canSubmit:false,canApprove:false};
 (function start(){
-  if(EXEC_URL.indexOf('exec')<0){ show('submitView'); initSubmit(); return; }
-  if(!initData()){ show('submitView'); initSubmit(); return; }   // вне Telegram — просто форма (подача всё равно потребует подпись)
-  window.onRole = function(r){
-    if(r && r.ok){
-      ROLE.canSubmit = !!r.canSubmit; ROLE.canApprove = !!r.canApprove;
-      if(ROLE.canApprove){
-        // директор — показываем развилку
-        document.getElementById('btnApprove').style.display='block';
-        document.getElementById('subBack').style.display='inline-block';
-        show('menuView');
-      } else {
-        // закупщик — сразу форма подачи
-        show('submitView'); initSubmit();
-      }
-    } else {
-      show('submitView'); initSubmit();
-    }
+  if(EXEC_URL.indexOf('exec')<0 || !initData()){ show('submitView'); initSubmit(); return; }
+  window.onRole=function(r){
+    if(r&&r.ok){
+      ROLE.canSubmit=!!r.canSubmit; ROLE.canApprove=!!r.canApprove;
+      document.getElementById('btnApproveInv').style.display = r.canApprove?'block':'none';
+      document.getElementById('btnApproveCash').style.display = r.canApprove?'block':'none';
+      document.getElementById('btnMine').style.display = (r.canSubmit && !r.canApprove)?'block':'none';
+      document.getElementById('cashHint').textContent = r.canApprove
+        ? 'Ваш расход запишется сразу.' : 'Отчёт уйдёт директору на подтверждение.';
+      show('menuView');
+    } else { show('submitView'); initSubmit(); }
   };
   var s=document.createElement('script');
   s.onerror=function(){ show('submitView'); initSubmit(); };
@@ -137,103 +161,141 @@ var ROLE = { canSubmit:false, canApprove:false };
 
 function showMenu(){ show('menuView'); }
 function showSubmit(){ show('submitView'); initSubmit(); }
+function showCash(){ show('cashView'); initCash(); }
 function showApprove(){ show('approveView'); loadInbox(); }
+function showCashApprove(){ show('cashApproveView'); loadCashApprove(); }
+function showMine(){ show('mineView'); loadMine(); }
 
-/* ===== ПОДАЧА ===== */
+/* ===== ПОДАЧА СЧЁТА ===== */
 var submitInited=false;
 function initSubmit(){
-  var d=new Date();
-  document.getElementById('paydate').value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  var d=new Date(); document.getElementById('paydate').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   if(submitInited) return; submitInited=true;
-  window.fillContractors = function(list){
-    var dl=document.getElementById('contrList'); dl.innerHTML='';
-    (list||[]).forEach(function(name){ var o=document.createElement('option'); o.value=name; dl.appendChild(o); });
-  };
-  if(EXEC_URL.indexOf('exec')>=0){
-    var s=document.createElement('script');
-    s.src=EXEC_URL+'?contractors=1&cb=fillContractors&t='+Date.now();
-    document.body.appendChild(s);
-  }
+  window.fillContractors=function(list){ var dl=document.getElementById('contrList'); dl.innerHTML=''; (list||[]).forEach(function(nm){ var o=document.createElement('option'); o.value=nm; dl.appendChild(o); }); };
+  if(EXEC_URL.indexOf('exec')>=0){ var s=document.createElement('script'); s.src=EXEC_URL+'?contractors=1&cb=fillContractors&t='+Date.now(); document.body.appendChild(s); }
 }
-function setMsg(t, cls){ var m=document.getElementById('msg'); m.textContent=t; m.className='msg '+(cls||''); }
+function setMsg(t,c){ var m=document.getElementById('msg'); m.textContent=t; m.className='msg '+(c||''); }
 function submitForm(){
   var contr=val('contr'), sum=num(val('sum'));
   if(!contr){ setMsg('Укажите контрагента','err'); return; }
   if(sum<=0){ setMsg('Укажите сумму','err'); return; }
-  if(!initData()){ setMsg('Откройте форму через бота','err'); return; }
-  if(EXEC_URL.indexOf('exec')<0){ setMsg('Форма не настроена: не вписан адрес сервера','err'); return; }
+  if(!initData()){ setMsg('Откройте через бота','err'); return; }
   document.getElementById('send').disabled=true; setMsg('Отправляю...');
-  var post=function(){
-    setH('kind','submit'); setH('initData', initData());
-    setH('contr', contr); setH('type', val('type')); setH('docNo', val('docno'));
-    setH('docDateIso', val('docdate')); setH('sum', sum); setH('payDateIso', val('paydate'));
-    setH('wallet', 'ООО BYN'); setH('note', val('note')); setH('id','');
-    var f=document.getElementById('hform'); f.action=EXEC_URL; f.submit();
-    setMsg('Готово! Счёт отправлен. Бот пришлёт подтверждение.','ok');
-    if(tg){ setTimeout(function(){ tg.close(); }, 1800); }
-  };
-  var fi=document.getElementById('file');
-  if(fi.files && fi.files[0]){
-    var fl=fi.files[0];
-    if(fl.size > 8*1024*1024){ setMsg('Файл больше 8 МБ - уменьшите','err'); document.getElementById('send').disabled=false; return; }
-    var rd=new FileReader();
-    rd.onload=function(){ setH('fileB64', rd.result.split(',')[1]); setH('fileName', fl.name); setH('fileMime', fl.type||'application/octet-stream'); post(); };
-    rd.onerror=function(){ setMsg('Не удалось прочитать файл','err'); document.getElementById('send').disabled=false; };
-    rd.readAsDataURL(fl);
-  } else { setH('fileB64',''); setH('fileName',''); setH('fileMime',''); post(); }
+  clearH(); setH('kind','submit'); setH('initData',initData());
+  setH('contr',contr); setH('type',val('type')); setH('docNo',val('docno'));
+  setH('docDateIso',val('docdate')); setH('sum',sum); setH('payDateIso',val('paydate'));
+  setH('wallet','ООО BYN'); setH('note',val('note'));
+  withFile('file', function(){ submitHidden(); setMsg('Готово! Счёт отправлен.','ok'); if(tg) setTimeout(function(){tg.close();},1700); },
+                   function(m){ setMsg(m,'err'); document.getElementById('send').disabled=false; });
 }
 
-/* ===== ОДОБРЕНИЕ ===== */
-function apMsg(t, cls){ var m=document.getElementById('apMsg'); m.textContent=t; m.className='msg '+(cls||''); }
+/* ===== НАЛИЧНЫЙ ОТЧЁТ ===== */
+var cashInited=false;
+function initCash(){
+  if(cashInited) return; cashInited=true;
+  window.onCashMeta=function(m){
+    var wsel=document.getElementById('c_wallet'); (m.wallets||[]).forEach(function(w){ var o=document.createElement('option'); o.value=w; o.textContent=w; wsel.appendChild(o); });
+    var csel=document.getElementById('c_cat'); (m.cats||[]).forEach(function(c){ var o=document.createElement('option'); o.value=c; o.textContent=c; csel.appendChild(o); });
+  };
+  if(EXEC_URL.indexOf('exec')>=0){ var s=document.createElement('script'); s.src=EXEC_URL+'?cashmeta=1&cb=onCashMeta&t='+Date.now(); document.body.appendChild(s); }
+}
+function cMsg(t,c){ var m=document.getElementById('cMsg'); m.textContent=t; m.className='msg '+(c||''); }
+function cashSubmit(){
+  var sum=num(val('c_sum'));
+  if(sum<=0){ cMsg('Укажите сумму','err'); return; }
+  if(!val('c_wallet')){ cMsg('Выберите наличный кошелёк','err'); return; }
+  if(!initData()){ cMsg('Откройте через бота','err'); return; }
+  document.getElementById('c_send').disabled=true; cMsg('Отправляю...');
+  clearH(); setH('kind','cash'); setH('initData',initData());
+  setH('sum',sum); setH('cat',val('c_cat')); setH('wallet',val('c_wallet'));
+  setH('name',val('c_name')); setH('note',val('c_note'));
+  withFile('c_file', function(){ submitHidden(); cMsg('Готово! Отправлено.','ok'); if(tg) setTimeout(function(){tg.close();},1700); },
+                     function(m){ cMsg(m,'err'); document.getElementById('c_send').disabled=false; });
+}
+
+/* ===== ОДОБРЕНИЕ СЧЕТОВ ===== */
+function apMsg(t,c){ var m=document.getElementById('apMsg'); m.textContent=t; m.className='msg '+(c||''); }
 function loadInbox(){
-  if(EXEC_URL.indexOf('exec')<0){ apMsg('Не настроен адрес сервера','err'); return; }
   if(!initData()){ apMsg('Откройте через бота','err'); return; }
   apMsg('Загружаю...');
-  window.onInbox = function(res){
-    if(!res || res.ok===false){ apMsg((res&&res.error)||'Ошибка загрузки','err'); return; }
-    apMsg('');
-    renderInbox(res.items||[]);
-  };
-  var s=document.createElement('script');
-  s.onerror=function(){ apMsg('Сеть недоступна','err'); };
-  s.src=EXEC_URL+'?inbox=1&cb=onInbox&initData='+encodeURIComponent(initData())+'&t='+Date.now();
-  document.body.appendChild(s);
+  window.onInbox=function(res){ if(!res||res.ok===false){ apMsg((res&&res.error)||'Ошибка','err'); return; } apMsg(''); renderInbox(res.items||[]); };
+  jsonp('inbox=1&cb=onInbox', function(){ apMsg('Сеть недоступна','err'); });
 }
 function renderInbox(items){
   var box=document.getElementById('apList');
   if(!items.length){ box.innerHTML='<div class="hint">Нет счетов на одобрении.</div>'; return; }
-  box.innerHTML = items.map(function(x){
-    var col = x.enough ? 'var(--green)' : 'var(--red)';
-    var file = x.file ? '<a href="'+esc(x.file)+'" target="_blank">открыть файл</a>' : '<span class="hint">нет файла</span>';
-    return '<div class="card" id="ap_'+esc(x.id)+'">'
-      + '<div class="top"><span class="nm">'+esc(x.contr||'—')+'</span><span class="nm">'+fmt(x.sum)+'</span></div>'
-      + '<div class="sm">'+esc(x.type||'счёт')+(x.docNo?(' №'+esc(x.docNo)):'')+' · '+file+'</div>'
-      + '<div class="row2"><span class="hint">оплатить:</span>'
-        + '<input type="date" id="apd_'+esc(x.id)+'" value="'+esc(x.payDateIso||'')+'">'
-        + '<span class="fc" style="color:'+col+';">остаток: '+fmt(x.afterPay)+'</span></div>'
-      + '<div class="acts">'
-        + '<button class="green" onclick="approve(\''+esc(x.id)+'\')">Одобрить</button>'
-        + '<button class="redb" onclick="reject(\''+esc(x.id)+'\')">Отклонить</button></div>'
-      + '</div>';
+  box.innerHTML=items.map(function(x){
+    var col=x.enough?'var(--green)':'var(--red)';
+    var file=x.file?'<a href="'+esc(x.file)+'" target="_blank">открыть файл</a>':'<span class="hint">нет файла</span>';
+    return '<div class="card" id="ap_'+esc(x.id)+'"><div class="top"><span class="nm">'+esc(x.contr||'—')+'</span><span class="nm">'+fmt(x.sum)+'</span></div>'
+      +'<div class="sm">'+esc(x.type||'счёт')+(x.docNo?(' №'+esc(x.docNo)):'')+' · '+file+'</div>'
+      +'<div class="row2"><span class="hint">оплатить:</span><input type="date" id="apd_'+esc(x.id)+'" value="'+esc(x.payDateIso||'')+'">'
+      +'<span class="fc" style="color:'+col+';">остаток: '+fmt(x.afterPay)+'</span></div>'
+      +'<div class="acts"><button class="green" onclick="approve(\''+esc(x.id)+'\')">Одобрить</button><button class="redb" onclick="reject(\''+esc(x.id)+'\')">Отклонить</button></div></div>';
   }).join('');
 }
-function sendAction(kind, id){
-  setH('kind', kind); setH('initData', initData()); setH('id', id);
-  setH('payDateIso', kind==='approve' ? (val('apd_'+id)||'') : '');
-  setH('wallet','ООО BYN');
-  ['contr','type','docNo','docDateIso','sum','note','fileB64','fileName','fileMime'].forEach(function(f){ setH(f,''); });
-  var f=document.getElementById('hform'); f.action=EXEC_URL; f.submit();
+function approve(id){ apMsg('Одобряю...'); actInv('approve',id,'payDateIso',val('apd_'+id)); fade('ap_'+id); setTimeout(loadInbox,1400); }
+function reject(id){ if(!confirm('Отклонить счёт?'))return; apMsg('Отклоняю...'); actInv('reject',id,'',''); fade('ap_'+id); setTimeout(loadInbox,1400); }
+function actInv(kind,id,extraK,extraV){ clearH(); setH('kind',kind); setH('initData',initData()); setH('id',id); if(extraK) setH(extraK,extraV); submitHidden(); }
+
+/* ===== ПОДТВЕРЖДЕНИЕ НАЛИЧНЫХ ===== */
+function caMsg(t,c){ var m=document.getElementById('caMsg'); m.textContent=t; m.className='msg '+(c||''); }
+function loadCashApprove(){
+  if(!initData()){ caMsg('Откройте через бота','err'); return; }
+  caMsg('Загружаю...');
+  window.onCashList=function(res){ if(!res||res.ok===false){ caMsg((res&&res.error)||'Ошибка','err'); return; } caMsg(''); renderCashApprove(res.items||[]); };
+  jsonp('cashlist=1&cb=onCashList', function(){ caMsg('Сеть недоступна','err'); });
 }
-function approve(id){
-  apMsg('Одобряю...'); sendAction('approve', id);
-  var card=document.getElementById('ap_'+id); if(card) card.style.opacity='0.4';
-  setTimeout(loadInbox, 1500);
+function renderCashApprove(items){
+  var box=document.getElementById('caList');
+  if(!items.length){ box.innerHTML='<div class="hint">Нет отчётов на подтверждении.</div>'; return; }
+  box.innerHTML=items.map(function(x){
+    var file=x.file?'<a href="'+esc(x.file)+'" target="_blank">чек</a>':'<span class="hint">без чека</span>';
+    var reimb=x.reimb?' · <span style="color:var(--gold);">возместить</span>':'';
+    return '<div class="card" id="ca_'+esc(x.id)+'"><div class="top"><span class="nm">'+esc(x.emp||'—')+'</span><span class="nm">'+fmt(x.sum)+'</span></div>'
+      +'<div class="sm">'+esc(x.cat||'')+(x.name?(' · '+esc(x.name)):'')+'</div>'
+      +'<div class="sm">'+esc(x.wallet||'')+reimb+' · '+file+(x.dateIso?(' · '+human(x.dateIso)):'')+'</div>'
+      +'<div class="acts"><button class="green" onclick="caOk(\''+esc(x.id)+'\')">Подтвердить</button><button class="redb" onclick="caNo(\''+esc(x.id)+'\')">Отклонить</button></div></div>';
+  }).join('');
 }
-function reject(id){
-  if(!confirm('Отклонить счёт?'))return;
-  apMsg('Отклоняю...'); sendAction('reject', id);
-  var card=document.getElementById('ap_'+id); if(card) card.style.opacity='0.4';
-  setTimeout(loadInbox, 1500);
+function caOk(id){ caMsg('Подтверждаю...'); actCash('cashok',id); fade('ca_'+id); setTimeout(loadCashApprove,1400); }
+function caNo(id){ if(!confirm('Отклонить отчёт? Сотрудник подаст заново.'))return; caMsg('Отклоняю...'); actCash('cashno',id); fade('ca_'+id); setTimeout(loadCashApprove,1400); }
+function actCash(kind,id){ clearH(); setH('kind',kind); setH('initData',initData()); setH('id',id); submitHidden(); }
+
+/* ===== МОИ ОТЧЁТЫ ===== */
+function myMsg(t,c){ var m=document.getElementById('myMsg'); m.textContent=t; m.className='msg '+(c||''); }
+function loadMine(){
+  if(!initData()){ myMsg('Откройте через бота','err'); return; }
+  myMsg('Загружаю...');
+  window.onMine=function(res){ if(!res||res.ok===false){ myMsg((res&&res.error)||'Ошибка','err'); return; } myMsg(''); renderMine(res.items||[]); };
+  jsonp('cashmine=1&cb=onMine', function(){ myMsg('Сеть недоступна','err'); });
+}
+function renderMine(items){
+  var box=document.getElementById('myList');
+  if(!items.length){ box.innerHTML='<div class="hint">Нет ваших отчётов на подтверждении.</div>'; return; }
+  box.innerHTML=items.map(function(x){
+    return '<div class="card" id="my_'+esc(x.id)+'"><div class="top"><span class="nm">'+fmt(x.sum)+'</span><span class="sm">'+human(x.dateIso)+'</span></div>'
+      +'<div class="sm">'+esc(x.cat||'')+(x.name?(' · '+esc(x.name)):'')+'</div>'
+      +'<div class="acts"><button class="redb" onclick="myDel(\''+esc(x.id)+'\')">Удалить</button></div></div>';
+  }).join('');
+}
+function myDel(id){ if(!confirm('Удалить отчёт?'))return; myMsg('Удаляю...'); clearH(); setH('kind','cashdel'); setH('initData',initData()); setH('id',id); submitHidden(); fade('my_'+id); setTimeout(loadMine,1400); }
+
+/* ===== общее ===== */
+function clearH(){ ['kind','contr','type','docNo','docDateIso','sum','payDateIso','wallet','note','cat','name','reimburse','spender','fileB64','fileName','fileMime','id'].forEach(function(f){ setH(f,''); }); }
+function submitHidden(){ var f=document.getElementById('hform'); f.action=EXEC_URL; f.submit(); }
+function fade(id){ var c=document.getElementById(id); if(c) c.style.opacity='0.4'; }
+function jsonp(qs, onerr){ var s=document.createElement('script'); s.onerror=onerr; s.src=EXEC_URL+'?'+qs+'&initData='+encodeURIComponent(initData())+'&t='+Date.now(); document.body.appendChild(s); }
+function withFile(inputId, ok, err){
+  var fi=document.getElementById(inputId);
+  if(fi.files && fi.files[0]){
+    var f=fi.files[0];
+    if(f.size>8*1024*1024){ err('Файл больше 8 МБ — уменьшите'); return; }
+    var rd=new FileReader();
+    rd.onload=function(){ setH('fileB64',rd.result.split(',')[1]); setH('fileName',f.name); setH('fileMime',f.type||'application/octet-stream'); ok(); };
+    rd.onerror=function(){ err('Не удалось прочитать файл'); };
+    rd.readAsDataURL(f);
+  } else { setH('fileB64',''); setH('fileName',''); setH('fileMime',''); ok(); }
 }
 </script>
 </body>
