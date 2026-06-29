@@ -30,6 +30,7 @@
   .card .acts{ display:flex; gap:8px; margin-top:8px; }
   .card .acts button{ margin-top:0; padding:9px; font-size:14px; }
   a{ color:var(--accent); }
+  .nbadge{ display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px; padding:0 6px; margin-left:8px; border-radius:10px; background:var(--red); color:#fff; font-size:13px; font-weight:700; vertical-align:middle; }
 </style>
 </head>
 <body>
@@ -139,6 +140,12 @@ function setH(id,v){ document.getElementById('h_'+id).value=(v==null?'':v); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 var VIEWS=['menuView','submitView','cashView','approveView','cashApproveView','mineView'];
 function show(id){ VIEWS.forEach(function(v){ document.getElementById(v).style.display=(v===id?'block':'none'); }); }
+// число-уведомление на кнопке меню (красный кружок справа)
+function setBtnBadge(btnId, label, n){
+  var b=document.getElementById(btnId); if(!b) return;
+  if(n>0) b.innerHTML=esc(label)+'<span class="nbadge">'+n+'</span>';
+  else b.textContent=label;
+}
 
 var STATYI=[];
 function loadStatyi(){
@@ -150,26 +157,40 @@ function statyaListHtml(id){
   return '<datalist id="'+id+'">'+STATYI.map(function(o){ return '<option value="'+esc(o.statya||o)+'">'+esc(o.napr||'')+'</option>'; }).join('')+'</datalist>';
 }
 var ROLE={canSubmit:false,canApprove:false};
-(function start(){
-  if(EXEC_URL.indexOf('exec')<0 || !initData()){ show('submitView'); initSubmit(); return; }
-  window.onRole=function(r){
-    if(r&&r.ok){
-      ROLE.canSubmit=!!r.canSubmit; ROLE.canApprove=!!r.canApprove;
-      document.getElementById('btnApproveInv').style.display = r.canApprove?'block':'none';
-      document.getElementById('btnApproveCash').style.display = r.canApprove?'block':'none';
-      document.getElementById('btnMine').style.display = (r.canSubmit && !r.canApprove)?'block':'none';
-      document.getElementById('cashHint').textContent = r.canApprove
-        ? 'Ваш расход запишется сразу.' : 'Отчёт уйдёт директору на подтверждение.';
-      show('menuView');
-    } else { show('submitView'); initSubmit(); }
-  };
+function applyRole(r, silent){
+  if(r&&r.ok){
+    ROLE.canSubmit=!!r.canSubmit; ROLE.canApprove=!!r.canApprove;
+    document.getElementById('btnApproveInv').style.display = r.canApprove?'block':'none';
+    document.getElementById('btnApproveCash').style.display = r.canApprove?'block':'none';
+    document.getElementById('btnMine').style.display = (r.canSubmit && !r.canApprove)?'block':'none';
+    if(r.canApprove){ setBtnBadge('btnApproveInv','✅ Одобрить счета', r.pendingInv||0); setBtnBadge('btnApproveCash','✅ Наличные отчёты', r.pendingCash||0); }
+    document.getElementById('cashHint').textContent = r.canApprove
+      ? 'Ваш расход запишется сразу.' : 'Отчёт уйдёт директору на подтверждение.';
+    if(!silent) show('menuView');
+  } else if(!silent){ show('submitView'); initSubmit(); }
+}
+function refreshRole(silent){
+  if(EXEC_URL.indexOf('exec')<0 || !initData()){ if(!silent){ show('submitView'); initSubmit(); } return; }
+  window.onRole=function(r){ applyRole(r, silent); };
   var s=document.createElement('script');
-  s.onerror=function(){ show('submitView'); initSubmit(); };
+  s.onerror=function(){ if(!silent){ show('submitView'); initSubmit(); } };
   s.src=EXEC_URL+'?role=1&cb=onRole&initData='+encodeURIComponent(initData())+'&t='+Date.now();
   document.body.appendChild(s);
-})();
+}
+refreshRole(false);
 
-function showMenu(){ show('menuView'); }
+// очистка форм после успешной отправки
+function resetSubmitForm(){
+  ['contr','docno','sum','note'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  var d=new Date(); var dd=document.getElementById('docdate'); if(dd) dd.value='';
+  document.getElementById('send').disabled=false;
+}
+function resetCashForm(){
+  ['c_sum','c_cat','c_name','c_note'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('c_send').disabled=false;
+}
+
+function showMenu(){ show('menuView'); if(ROLE.canApprove) refreshRole(true); }
 function showSubmit(){ show('submitView'); initSubmit(); }
 function showCash(){ show('cashView'); initCash(); }
 function showApprove(){ show('approveView'); loadInbox(); }
@@ -195,7 +216,7 @@ function submitForm(){
   setH('contr',contr); setH('type',val('type')); setH('docNo',val('docno'));
   setH('docDateIso',val('docdate')); setH('sum',sum); setH('payDateIso',val('paydate'));
   setH('wallet','ООО BYN'); setH('note',val('note'));
-  withFile('file', function(){ submitHidden(); setMsg('Готово! Счёт отправлен.','ok'); if(tg) setTimeout(function(){tg.close();},1700); },
+  withFile('file', function(){ submitHidden(); setMsg('Готово! Счёт отправлен.','ok'); resetSubmitForm(); setTimeout(function(){ showMenu(); refreshRole(true); },1400); },
                    function(m){ setMsg(m,'err'); document.getElementById('send').disabled=false; });
 }
 
@@ -220,7 +241,7 @@ function cashSubmit(){
   clearH(); setH('kind','cash'); setH('initData',initData());
   setH('sum',sum); setH('cat',val('c_cat')); setH('wallet',val('c_wallet'));
   setH('name',val('c_name')); setH('note',val('c_note'));
-  withFile('c_file', function(){ submitHidden(); cMsg('Готово! Отправлено.','ok'); if(tg) setTimeout(function(){tg.close();},1700); },
+  withFile('c_file', function(){ submitHidden(); cMsg('Готово! Отправлено.','ok'); resetCashForm(); setTimeout(function(){ showMenu(); refreshRole(true); },1400); },
                      function(m){ cMsg(m,'err'); document.getElementById('c_send').disabled=false; });
 }
 
