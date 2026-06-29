@@ -348,6 +348,7 @@ function invMsg(t,c){ var m=document.getElementById('invMsg'); m.textContent=t; 
 function loadInvoices(reset){
   if(!initData()){ invMsg('Откройте через бота','err'); return; }
   if(invLoading) return;
+  loadStatyi();
   if(reset){ invItems=[]; invOffset=0; document.getElementById('invList').innerHTML=''; }
   invLoading=true; invMsg('Загружаю...');
   window.onInvoices=function(res){
@@ -364,7 +365,6 @@ function loadInvoices(reset){
 function invStatusChip(x){
   var c, bg;
   if(x.pending){ c='#b8860b'; bg='#fdf6e3'; }
-  else if(x.rejected){ c='#888'; bg='#f0f0f0'; }
   else if(x.paid){ c='#137333'; bg='#e6f4ea'; }
   else { c='#c00'; bg='#fce8e6'; }
   return '<span style="font-size:11px;font-weight:600;color:'+c+';background:'+bg+';border-radius:6px;padding:2px 7px;">'+esc(x.status)+'</span>';
@@ -376,10 +376,30 @@ function renderInvoices(){
     var file=x.file?'<a href="'+esc(x.file)+'" target="_blank">файл</a>':'<span class="hint">нет файла</span>';
     var dt=x.docDateIso?human(x.docDateIso):'';
     var pay=x.payDateIso?(' · оплата '+human(x.payDateIso)):'';
-    return '<div class="card"><div class="top"><span class="nm">'+esc(x.contr||'—')+'</span><span class="nm">'+fmt(x.sum)+'</span></div>'
+    var head='<div class="card" id="iv_'+esc(x.id)+'"><div class="top"><span class="nm">'+esc(x.contr||'—')+'</span><span class="nm">'+fmt(x.sum)+'</span></div>'
       +'<div class="sm">'+esc(x.type||'счёт')+(x.docNo?(' №'+esc(x.docNo)):'')+(dt?(' · '+dt):'')+pay+'</div>'
-      +'<div class="row2">'+invStatusChip(x)+' · '+file+'</div></div>';
+      +'<div class="row2">'+invStatusChip(x)+' · '+file+'</div>';
+    if(x.pending){
+      head+='<div class="row2"><span class="hint">оплатить:</span><input type="date" id="ivd_'+esc(x.id)+'" value="'+esc(x.payDateIso||'')+'"></div>'
+        +'<div class="fld" style="margin-top:8px;"><label>Статья расхода (обязательно)</label><input id="ivs_'+esc(x.id)+'" list="ivsl_'+esc(x.id)+'" placeholder="поиск статьи" autocomplete="off">'+statyaListHtml('ivsl_'+esc(x.id))+'</div>'
+        +'<div class="acts"><button class="green" onclick="invApprove(\''+esc(x.id)+'\')">Одобрить</button><button class="redb" onclick="invReject(\''+esc(x.id)+'\')">Отклонить</button></div>';
+    }
+    return head+'</div>';
   }).join('');
+}
+function invApprove(id){
+  var statya=val('ivs_'+id);
+  if(!statya){ invMsg('Укажите статью расхода — без неё одобрить нельзя.','err'); var f=document.getElementById('ivs_'+id); if(f) f.focus(); return; }
+  invMsg('Одобряю...');
+  clearH(); setH('kind','approve'); setH('initData',initData()); setH('id',id);
+  setH('payDateIso',val('ivd_'+id)); setH('statya',statya);
+  submitHidden(); fade('iv_'+id); setTimeout(function(){ loadInvoices(true); },1600);
+}
+function invReject(id){
+  if(!confirm('Отклонить счёт?'))return;
+  invMsg('Отклоняю...');
+  clearH(); setH('kind','reject'); setH('initData',initData()); setH('id',id);
+  submitHidden(); fade('iv_'+id); setTimeout(function(){ loadInvoices(true); },1600);
 }
 
 /* ===== общее ===== */
