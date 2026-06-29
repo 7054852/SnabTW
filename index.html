@@ -143,8 +143,16 @@ function show(id){ VIEWS.forEach(function(v){ document.getElementById(v).style.d
 // число-уведомление на кнопке меню (красный кружок справа)
 function setBtnBadge(btnId, label, n){
   var b=document.getElementById(btnId); if(!b) return;
-  if(n>0) b.innerHTML=esc(label)+'<span class="nbadge">'+n+'</span>';
-  else b.textContent=label;
+  b.setAttribute('data-label', label);
+  if(n>0){ b.setAttribute('data-n', n); b.innerHTML=esc(label)+'<span class="nbadge">'+n+'</span>'; }
+  else { b.setAttribute('data-n', 0); b.textContent=label; }
+}
+// оптимистично прибавить 1 к счётчику кнопки (до фоновой сверки с сервером)
+function bumpBtnBadge(btnId){
+  var b=document.getElementById(btnId); if(!b) return;
+  var label=b.getAttribute('data-label')||b.textContent;
+  var n=(Number(b.getAttribute('data-n'))||0)+1;
+  setBtnBadge(btnId, label, n);
 }
 
 var STATYI=[];
@@ -216,7 +224,7 @@ function submitForm(){
   setH('contr',contr); setH('type',val('type')); setH('docNo',val('docno'));
   setH('docDateIso',val('docdate')); setH('sum',sum); setH('payDateIso',val('paydate'));
   setH('wallet','ООО BYN'); setH('note',val('note'));
-  withFile('file', function(){ submitHidden(); setMsg('Готово! Счёт отправлен.','ok'); resetSubmitForm(); setTimeout(function(){ showMenu(); refreshRole(true); },1400); },
+  withFile('file', function(){ submitHidden(); setMsg('Готово! Счёт отправлен.','ok'); resetSubmitForm(); if(ROLE.canApprove) bumpBtnBadge('btnApproveInv'); setTimeout(function(){ show('menuView'); },1000); setTimeout(function(){ refreshRole(true); },2500); },
                    function(m){ setMsg(m,'err'); document.getElementById('send').disabled=false; });
 }
 
@@ -241,7 +249,7 @@ function cashSubmit(){
   clearH(); setH('kind','cash'); setH('initData',initData());
   setH('sum',sum); setH('cat',val('c_cat')); setH('wallet',val('c_wallet'));
   setH('name',val('c_name')); setH('note',val('c_note'));
-  withFile('c_file', function(){ submitHidden(); cMsg('Готово! Отправлено.','ok'); resetCashForm(); setTimeout(function(){ showMenu(); refreshRole(true); },1400); },
+  withFile('c_file', function(){ submitHidden(); cMsg('Готово! Отправлено.','ok'); resetCashForm(); setTimeout(function(){ show('menuView'); },1000); setTimeout(function(){ refreshRole(true); },2500); },
                      function(m){ cMsg(m,'err'); document.getElementById('c_send').disabled=false; });
 }
 
