@@ -42,6 +42,7 @@
   <button class="gold" onclick="showCash()">💵 Наличный отчёт</button>
   <button class="green" id="btnApproveInv" onclick="showApprove()" style="display:none;">✅ Одобрить счета</button>
   <button class="green" id="btnApproveCash" onclick="showCashApprove()" style="display:none;">✅ Наличные отчёты</button>
+  <button class="gray" id="btnInvoices" onclick="showInvoices()" style="display:none;">📋 Все счета</button>
   <button class="gray" id="btnMine" onclick="showMine()" style="display:none;">🗑 Мои отчёты (удалить)</button>
   <div class="msg" id="menuMsg"></div>
 </div>
@@ -110,6 +111,15 @@
   <button class="gray" onclick="loadMine()">Обновить</button>
 </div>
 
+<!-- ВСЕ СЧЕТА -->
+<div id="invoicesView" style="display:none;">
+  <span class="back" onclick="showMenu()">‹ назад</span>
+  <h2>Все счета</h2>
+  <div class="hint" style="margin-bottom:8px;">Сначала неоплаченные (старые сверху), затем оплаченные.</div>
+  <div id="invList"></div><div class="msg" id="invMsg"></div>
+  <button class="gray" id="invMore" onclick="loadInvoices(false)" style="display:none;">Загрузить ещё 25</button>
+</div>
+
 <iframe name="sink" id="sink" style="display:none"></iframe>
 <form id="hform" method="POST" target="sink" style="display:none">
   <input type="hidden" name="kind" id="h_kind">
@@ -138,7 +148,7 @@ function fmt(n){ return (Number(n)||0).toLocaleString('ru-RU',{minimumFractionDi
 function human(iso){ if(!iso) return ''; var p=iso.split('-'); return p.length===3?(p[2]+'.'+p[1]+'.'+p[0]):iso; }
 function setH(id,v){ document.getElementById('h_'+id).value=(v==null?'':v); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-var VIEWS=['menuView','submitView','cashView','approveView','cashApproveView','mineView'];
+var VIEWS=['menuView','submitView','cashView','approveView','cashApproveView','mineView','invoicesView'];
 function show(id){ VIEWS.forEach(function(v){ document.getElementById(v).style.display=(v===id?'block':'none'); }); }
 // число-уведомление на кнопке меню (красный кружок справа)
 function setBtnBadge(btnId, label, n){
@@ -170,6 +180,7 @@ function applyRole(r, silent){
     ROLE.canSubmit=!!r.canSubmit; ROLE.canApprove=!!r.canApprove;
     document.getElementById('btnApproveInv').style.display = r.canApprove?'block':'none';
     document.getElementById('btnApproveCash').style.display = r.canApprove?'block':'none';
+    document.getElementById('btnInvoices').style.display = r.canApprove?'block':'none';
     document.getElementById('btnMine').style.display = (r.canSubmit && !r.canApprove)?'block':'none';
     if(r.canApprove){ setBtnBadge('btnApproveInv','✅ Одобрить счета', r.pendingInv||0); setBtnBadge('btnApproveCash','✅ Наличные отчёты', r.pendingCash||0); }
     document.getElementById('cashHint').textContent = r.canApprove
@@ -204,6 +215,7 @@ function showCash(){ show('cashView'); initCash(); }
 function showApprove(){ show('approveView'); loadInbox(); }
 function showCashApprove(){ show('cashApproveView'); loadCashApprove(); }
 function showMine(){ show('mineView'); loadMine(); }
+function showInvoices(){ show('invoicesView'); loadInvoices(true); }
 
 /* ===== ПОДАЧА СЧЁТА ===== */
 var submitInited=false;
@@ -329,6 +341,46 @@ function renderMine(items){
   }).join('');
 }
 function myDel(id){ if(!confirm('Удалить отчёт?'))return; myMsg('Удаляю...'); clearH(); setH('kind','cashdel'); setH('initData',initData()); setH('id',id); submitHidden(); fade('my_'+id); setTimeout(loadMine,1400); }
+
+/* ===== ВСЕ СЧЕТА (директор) ===== */
+var invItems=[], invOffset=0, invLoading=false;
+function invMsg(t,c){ var m=document.getElementById('invMsg'); m.textContent=t; m.className='msg '+(c||''); }
+function loadInvoices(reset){
+  if(!initData()){ invMsg('Откройте через бота','err'); return; }
+  if(invLoading) return;
+  if(reset){ invItems=[]; invOffset=0; document.getElementById('invList').innerHTML=''; }
+  invLoading=true; invMsg('Загружаю...');
+  window.onInvoices=function(res){
+    invLoading=false;
+    if(!res||res.ok===false){ invMsg((res&&res.error)||'Ошибка','err'); return; }
+    invMsg('');
+    invItems=invItems.concat(res.items||[]);
+    invOffset = (res.offset||0) + (res.items?res.items.length:0);
+    renderInvoices();
+    document.getElementById('invMore').style.display = res.hasMore ? 'block' : 'none';
+  };
+  jsonp('invoices=1&offset='+invOffset+'&cb=onInvoices', function(){ invLoading=false; invMsg('Сеть недоступна','err'); });
+}
+function invStatusChip(x){
+  var c, bg;
+  if(x.pending){ c='#b8860b'; bg='#fdf6e3'; }
+  else if(x.rejected){ c='#888'; bg='#f0f0f0'; }
+  else if(x.paid){ c='#137333'; bg='#e6f4ea'; }
+  else { c='#c00'; bg='#fce8e6'; }
+  return '<span style="font-size:11px;font-weight:600;color:'+c+';background:'+bg+';border-radius:6px;padding:2px 7px;">'+esc(x.status)+'</span>';
+}
+function renderInvoices(){
+  var box=document.getElementById('invList');
+  if(!invItems.length){ box.innerHTML='<div class="hint">Счетов нет.</div>'; return; }
+  box.innerHTML=invItems.map(function(x){
+    var file=x.file?'<a href="'+esc(x.file)+'" target="_blank">файл</a>':'<span class="hint">нет файла</span>';
+    var dt=x.docDateIso?human(x.docDateIso):'';
+    var pay=x.payDateIso?(' · оплата '+human(x.payDateIso)):'';
+    return '<div class="card"><div class="top"><span class="nm">'+esc(x.contr||'—')+'</span><span class="nm">'+fmt(x.sum)+'</span></div>'
+      +'<div class="sm">'+esc(x.type||'счёт')+(x.docNo?(' №'+esc(x.docNo)):'')+(dt?(' · '+dt):'')+pay+'</div>'
+      +'<div class="row2">'+invStatusChip(x)+' · '+file+'</div></div>';
+  }).join('');
+}
 
 /* ===== общее ===== */
 function clearH(){ ['kind','contr','type','docNo','docDateIso','sum','payDateIso','wallet','note','cat','name','reimburse','spender','fileB64','fileName','fileMime','statya','id'].forEach(function(f){ setH(f,''); }); }
