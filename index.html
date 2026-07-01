@@ -456,16 +456,18 @@ function showDocAdd(){
   var df=document.getElementById('d_file');
   if(df && !df._expandBound){ df._expandBound=true; df.addEventListener('change', function(){ if(tg && tg.expand) setTimeout(function(){ tg.expand(); }, 100); }); }
 }
+var docReqId=0;
 function loadDocs(reset){
   if(!initData()){ docsMsg('Откройте через бота','err'); return; }
   if(docLoading) return;
   if(reset){ docItems=[]; docOffset=0; document.getElementById('docList').innerHTML=''; }
   docLoading=true; docsMsg('Загружаю...');
+  var myReq=++docReqId;
   window.onDocsList=function(res){
+    if(myReq!==docReqId) return;              // устаревший ответ — игнорируем (защита от дублей)
     docLoading=false;
     if(!res||res.ok===false){ docsMsg((res&&res.error)||'Ошибка','err'); return; }
     docsMsg('');
-    window._docsRaw=(res.rawRows!=null)?res.rawRows:null;
     docItems=docItems.concat(res.items||[]);
     docOffset=(res.offset||0)+(res.items?res.items.length:0);
     renderDocs();
@@ -494,7 +496,7 @@ function docSubmit(){
   clearH(); setH('kind','docsave'); setH('initData',initData());
   setH('type',val('d_type')); setH('contr',contr); setH('docNo',val('d_docno'));
   setH('dateIso',val('d_date')); setH('sum',sum); setH('cur',val('d_cur')); setH('name',val('d_name'));
-  withFile('d_file', function(){ submitHidden(); dMsg('Готово! Документ сохранён и отправлен бухгалтеру.','ok'); resetDocForm(); setTimeout(function(){ showDocs(); },2500); setTimeout(function(){ if(document.getElementById('docsView').style.display!=='none'){ docLoading=false; loadDocs(true); } },5000); },
+  withFile('d_file', function(){ submitHidden(); dMsg('Готово! Документ сохранён и отправлен бухгалтеру.','ok'); resetDocForm(); setTimeout(function(){ showDocs(); },2800); },
                      function(m){ dMsg(m,'err'); document.getElementById('d_send').disabled=false; });
 }
 function dMsg(t,c){ var m=document.getElementById('docAddMsg'); if(m){ m.textContent=t; m.className='msg '+(c||''); } }
