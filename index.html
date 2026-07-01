@@ -29,6 +29,23 @@
   .card .fc{ font-size:12px; font-weight:600; }
   .card .acts{ display:flex; gap:8px; margin-top:8px; }
   .card .acts button{ margin-top:0; padding:9px; font-size:14px; }
+  /* карточка документа */
+  .doccard{ display:flex; gap:10px; align-items:stretch; border:1px solid var(--line); border-radius:12px; padding:0; margin-bottom:10px; overflow:hidden; transition:background .15s,border-color .15s; }
+  .doccard.sel{ background:#e8f0fe; border-color:#1a73e8; }
+  .doccard.sent{ background:#f2fbf4; }
+  .doccard .pick{ display:flex; align-items:center; padding:0 4px 0 12px; cursor:pointer; }
+  .doccard .pick input{ width:22px; height:22px; cursor:pointer; accent-color:#1a73e8; }
+  .doccard .body{ flex:1; padding:11px 12px 11px 4px; min-width:0; }
+  .doccard .r1{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  .doccard .r1 .contr{ font-weight:600; font-size:15px; overflow:hidden; text-overflow:ellipsis; }
+  .doccard .r1 .sum{ font-weight:700; font-size:15px; white-space:nowrap; }
+  .doccard .meta{ font-size:12px; color:var(--muted); margin-top:2px; }
+  .doccard .foot{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px; }
+  .doccard .st-check{ color:#b26a00; font-weight:600; font-size:13px; }
+  .doccard .st-sent{ color:#137333; font-weight:600; font-size:13px; }
+  .doccard .flink{ font-size:13px; }
+  .doccard .trash{ background:none; border:0; color:#c9c9c9; font-size:17px; cursor:pointer; padding:4px 6px; margin:0; line-height:1; transition:color .15s; }
+  .doccard .trash:hover{ color:#d33; }
   a{ color:var(--accent); }
   .nbadge{ display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px; padding:0 6px; margin-left:8px; border-radius:10px; background:var(--red); color:#fff; font-size:13px; font-weight:700; vertical-align:middle; }
 </style>
@@ -483,23 +500,28 @@ function renderDocs(){
   var box=document.getElementById('docList');
   if(!docItems.length){ box.innerHTML='<div class="hint">Документов пока нет.</div>'; updateDocSendBar(); return; }
   box.innerHTML=docItems.map(function(d){
-    var file=d.file?'<a href="'+esc(d.file)+'" target="_blank">файл</a>':'<span class="hint">нет файла</span>';
     var sent=(d.status==='отправлен');
-    var badge=sent?'<span style="color:#137333;font-weight:600;">✓ отправлен</span>'
-                  :'<span style="color:#b26a00;font-weight:600;">● на проверке</span>';
-    var head='<div class="top"><span class="nm">'+esc(d.contr||'—')+'</span><span class="nm">'+fmt(d.sum)+' '+esc(d.cur||'')+'</span></div>';
-    var chk=sent?'':'<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" '+(docChecked[d.row]?'checked':'')+' onchange="toggleDoc('+d.row+',this.checked)"> выбрать</label>';
-    var del=sent?'':'<button class="mini" onclick="docDelete('+d.row+')" style="color:#c00;">удалить</button>';
-    return '<div class="card"'+(sent?' style="background:#f2fbf4;"':'')+'>'+head
-      +'<div class="sm">'+esc(d.type||'документ')+(d.docNo?(' №'+esc(d.docNo)):'')+(d.dateIso?(' · '+human(d.dateIso)):'')+'</div>'
-      +(d.name?'<div class="sm">'+esc(d.name)+'</div>':'')
-      +'<div class="row2" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">'
-      +'<span>'+badge+' · '+file+'</span>'
-      +'<span style="display:flex;gap:10px;align-items:center;">'+chk+del+'</span></div></div>';
+    var sel=!!docChecked[d.row];
+    var file=d.file?'<a class="flink" href="'+esc(d.file)+'" target="_blank">файл</a>':'<span class="hint">нет файла</span>';
+    var status=sent?'<span class="st-sent">✓ отправлен</span>':'<span class="st-check">● на проверке</span>';
+    var pick=sent?'':'<label class="pick"><input type="checkbox" '+(sel?'checked':'')+' onchange="toggleDoc('+d.row+',this.checked)"></label>';
+    var trash=sent?'':'<button class="trash" title="удалить" onclick="docDelete('+d.row+')">🗑</button>';
+    var cls='doccard'+(sent?' sent':'')+(sel?' sel':'');
+    return '<div class="'+cls+'" id="doc_'+d.row+'">'+pick
+      +'<div class="body">'
+      +'<div class="r1"><span class="contr">'+esc(d.contr||'—')+'</span><span class="sum">'+fmt(d.sum)+' '+esc(d.cur||'')+'</span></div>'
+      +'<div class="meta">'+esc(d.type||'документ')+(d.docNo?(' №'+esc(d.docNo)):'')+(d.dateIso?(' · '+human(d.dateIso)):'')+'</div>'
+      +(d.name?'<div class="meta">'+esc(d.name)+'</div>':'')
+      +'<div class="foot"><span>'+status+' · '+file+'</span>'+trash+'</div>'
+      +'</div></div>';
   }).join('');
   updateDocSendBar();
 }
-function toggleDoc(row,on){ if(on) docChecked[row]=true; else delete docChecked[row]; updateDocSendBar(); }
+function toggleDoc(row,on){
+  if(on) docChecked[row]=true; else delete docChecked[row];
+  var el=document.getElementById('doc_'+row); if(el){ if(on) el.classList.add('sel'); else el.classList.remove('sel'); }
+  updateDocSendBar();
+}
 function updateDocSendBar(){
   var bar=document.getElementById('docSendBar'); if(!bar) return;
   var n=Object.keys(docChecked).length;
