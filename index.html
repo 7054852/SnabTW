@@ -47,7 +47,10 @@
   .doccard .st-sent{ color:#137333; font-weight:600; font-size:13px; }
   .doccard .st-queue{ color:#1a73e8; font-weight:600; font-size:13px; }
   .doccard .st-err{ color:#c00; font-weight:600; font-size:13px; }
-  .doccard.queue{ opacity:.75; }
+  .doccard.queue{ opacity:.75; animation:docpulse 1.6s ease-in-out infinite; }
+  @keyframes docpulse{ 0%,100%{ opacity:.75; } 50%{ opacity:.45; } }
+  .dtab{ flex:1; padding:8px; font-size:13px; border:1px solid var(--line); background:#fff; color:#555; border-radius:8px; cursor:pointer; margin:0; }
+  .dtab.active{ background:#1a73e8; border-color:#1a73e8; color:#fff; font-weight:600; }
   .doccard .flink{ font-size:13px; }
   .doccard .docactions{ display:flex; justify-content:flex-end; border-top:1px solid rgba(0,0,0,.05); margin:8px 12px 0 4px; padding-top:6px; }
   .doccard .trash{ background:none; border:0; color:#b8b8b8; cursor:pointer; padding:5px 9px; margin:0; display:inline-flex; align-items:center; gap:5px; font-size:13px; border-radius:8px; transition:color .15s,background .15s; }
@@ -150,8 +153,13 @@
   <span class="back" onclick="showMenu()">‹ назад</span>
   <h2>Документы</h2>
   <button class="green" onclick="showDocAdd()" style="margin-bottom:10px;">➕ Добавить документ</button>
+  <div id="docQueueBar" class="hint" style="display:none;margin-bottom:8px;color:#1a73e8;font-weight:600;"></div>
   <div id="docSendBar" style="display:none;margin-bottom:10px;"><button id="docSendBtn" class="green" onclick="docSendSelected()" style="background:#1a73e8;">📤 Отправить бухгалтеру</button></div>
-  <div class="hint" style="margin-bottom:6px;">Последние загруженные накладные и акты.</div>
+  <input id="docSearch" placeholder="🔍 Поиск: контрагент, №, товар, сумма" oninput="docSearchInput()" style="margin-bottom:8px;">
+  <div class="doctabs" style="display:flex;gap:6px;margin-bottom:8px;">
+    <button id="tabAdded" class="dtab active" onclick="setDocSort('added')">Новые</button>
+    <button id="tabDocdate" class="dtab" onclick="setDocSort('docdate')">По дате документа</button>
+  </div>
   <div id="docList"></div><div class="msg" id="docsMsg"></div>
   <button class="gray" id="docMore" onclick="loadDocs(false)" style="display:none;">Загрузить ещё 25</button>
 </div>
@@ -482,6 +490,21 @@ function fade(id){ var c=document.getElementById(id); if(c) c.style.opacity='0.4
 function jsonp(qs, onerr){ var s=document.createElement('script'); s.onerror=onerr; s.src=EXEC_URL+'?'+qs+'&initData='+encodeURIComponent(initData())+'&t='+Date.now(); document.body.appendChild(s); }
 /* ===== ДОКУМЕНТЫ (директор) ===== */
 var docItems=[], docOffset=0, docLoading=false, docContrFilled=false;
+var docSort='added', docQuery='';
+function setDocSort(s){
+  docSort=s;
+  document.getElementById('tabAdded').className='dtab'+(s==='added'?' active':'');
+  document.getElementById('tabDocdate').className='dtab'+(s==='docdate'?' active':'');
+  docLoading=false; loadDocs(true);
+}
+var _docSearchT=null;
+function docSearchInput(){
+  clearTimeout(_docSearchT);
+  _docSearchT=setTimeout(function(){
+    var q=(document.getElementById('docSearch').value||'').trim();
+    if(q!==docQuery){ docQuery=q; docLoading=false; loadDocs(true); }
+  },500);
+}
 var DOC_TYPES=['ТН','ТТН','Акт','УПД','Инвойс','Чек','Прочее'];
 function buildTypeSelect(){
   var s=document.getElementById('e_type'); if(!s) return;
@@ -517,9 +540,15 @@ function docUploadAll(){
   var arr=Array.prototype.slice.call(files);
   var total=arr.length, uploaded=0;
   upMsg('Загружаю файлы…'); prog('Загрузка: 0 из '+total);
-  // 1) грузим все в очередь (по одному, чтобы не упереться в размер запроса)
   var uploadNext=function(idx){
-    if(idx>=arr.length){ afterUpload(total); return; }
+    if(idx>=arr.length){
+      // все файлы в очереди → сразу в список (заглушки видны), распознавание в фоне
+      docUploading=false; document.getElementById('d_upload').disabled=false;
+      upMsg(''); prog('');
+      docLoading=false; showDocs();
+      startBackgroundProcessing();
+      return;
+    }
     var f=arr[idx];
     var rd=new FileReader();
     rd.onload=function(){
@@ -537,34 +566,20 @@ function docUploadAll(){
   };
   uploadNext(0);
 }
-function afterUpload(total){
-  upMsg('Файлы загружены. Распознаю…','ok');
-  var done=0, errors=0;
-  var processNext=function(){
+// фоновая молотилка очереди (пока приложение открыто; закрыл — доделает триггер)
+var docBgRunning=false;
+function startBackgroundProcessing(){
+  if(docBgRunning) return;
+  docBgRunning=true;
+  var step=function(){
     var body=new URLSearchParams();
     body.set('kind','docprocess'); body.set('initData',initData());
     fetch(EXEC_URL,{method:'POST',body:body}).then(function(r){return r.json();}).then(function(res){
-      if(res && res.done){ finishUpload(done,errors); return; }
-      if(res && res.row){
-        if(res.ok===false){ errors++; } else { done++; }
-        prog('Распознано: '+done+(errors?(' · ошибок: '+errors):'')+' (в очереди…)');
-      }
-      processNext();
-    }).catch(function(){ setTimeout(processNext,1500); });   // сбой сети — повторим, очередь не потеряется
+      if(res && res.done){ docBgRunning=false; return; }   // очередь пуста
+      step();
+    }).catch(function(){ setTimeout(step,2000); });
   };
-  processNext();
-}
-function finishUpload(done,errors){
-  docUploading=false; document.getElementById('d_upload').disabled=false;
-  if(errors){
-    prog('Готово. Распознано: '+done+', не удалось: '+errors+'.');
-    upMsg('Распознано '+done+', с ошибкой '+errors+'. Документы с ошибкой отмечены — откройте и заполните вручную или нажмите «Определить заново».','err');
-    setTimeout(function(){ showDocs(); },2600);
-  } else {
-    prog('✓ Готово. Все документы распознаны.');
-    upMsg('Готово! Проверьте документы в списке.','ok');
-    setTimeout(function(){ showDocs(); },1500);
-  }
+  step();
 }
 function upMsg(t,c){ var m=document.getElementById('docUpMsg'); if(m){ m.textContent=t; m.className='msg '+(c||''); } }
 function prog(t){ var p=document.getElementById('docUpProgress'); if(p) p.innerHTML='<div class="hint">'+esc(t)+'</div>'; }
@@ -583,12 +598,19 @@ function loadDocs(reset){
     docItems=docItems.concat(res.items||[]);
     docOffset=(res.offset||0)+(res.items?res.items.length:0);
     renderDocs();
+    updateQueueBar();
     document.getElementById('docMore').style.display=res.hasMore?'block':'none';
     // если есть документы в очереди — обновим список через 4 сек (статусы догонятся)
     var pending=docItems.some(function(d){ return d.status==='в очереди'||d.status==='распознаётся'; });
     if(pending){ clearTimeout(window._docPoll); window._docPoll=setTimeout(function(){ if(document.getElementById('docsView').style.display!=='none'){ docLoading=false; loadDocs(true); } },4000); }
   };
-  jsonp('docslist=1&offset='+docOffset+'&cb=onDocsList', function(){ docLoading=false; docsMsg('Сеть недоступна','err'); });
+  jsonp('docslist=1&offset='+docOffset+'&sort='+docSort+'&q='+encodeURIComponent(docQuery)+'&cb=onDocsList', function(){ docLoading=false; docsMsg('Сеть недоступна','err'); });
+}
+function updateQueueBar(){
+  var bar=document.getElementById('docQueueBar'); if(!bar) return;
+  var inQ=docItems.filter(function(d){ return d.status==='в очереди'||d.status==='распознаётся'; }).length;
+  if(inQ){ bar.style.display='block'; bar.textContent='⏳ Распознаётся: '+inQ+'…'; }
+  else bar.style.display='none';
 }
 var docChecked={};
 function renderDocs(){
