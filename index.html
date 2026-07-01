@@ -37,20 +37,21 @@
   .doccard.sent{ background:#f2fbf4; }
   .doccard .pick{ display:flex; align-items:center; padding:0 4px 0 12px; cursor:pointer; }
   .doccard .pick input{ width:22px; height:22px; cursor:pointer; accent-color:#1a73e8; }
-  .doccard .body{ flex:1; padding:11px 12px 11px 4px; min-width:0; }
-  .doccard .foot{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px; }
+  .doccard .body{ flex:1; padding:11px 12px 8px 4px; min-width:0; }
+  .doccard .foot{ display:flex; align-items:center; gap:6px; margin-top:6px; flex-wrap:wrap; }
   .doccard .r1{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
   .doccard .r1 .contr{ font-weight:600; font-size:15px; overflow:hidden; text-overflow:ellipsis; }
   .doccard .r1 .sum{ font-weight:700; font-size:15px; white-space:nowrap; }
   .doccard .meta{ font-size:12px; color:var(--muted); margin-top:2px; }
-  .doccard .foot{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px; }
   .doccard .st-check{ color:#b26a00; font-weight:600; font-size:13px; }
   .doccard .st-sent{ color:#137333; font-weight:600; font-size:13px; }
   .doccard .st-queue{ color:#1a73e8; font-weight:600; font-size:13px; }
   .doccard .st-err{ color:#c00; font-weight:600; font-size:13px; }
   .doccard.queue{ opacity:.75; }
   .doccard .flink{ font-size:13px; }
-  .doccard .trash{ background:none; border:0; color:#cfcfcf; cursor:pointer; padding:4px 6px; margin:0; display:inline-flex; align-items:center; border-radius:8px; flex-shrink:0; transition:color .15s,background .15s; }
+  .doccard .docactions{ display:flex; justify-content:flex-end; border-top:1px solid rgba(0,0,0,.05); margin:8px 12px 0 4px; padding-top:6px; }
+  .doccard .trash{ background:none; border:0; color:#b8b8b8; cursor:pointer; padding:5px 9px; margin:0; display:inline-flex; align-items:center; gap:5px; font-size:13px; border-radius:8px; transition:color .15s,background .15s; }
+  .doccard .trash svg{ width:15px; height:15px; }
   .doccard .trash:hover{ color:#d33; background:#f7eaea; }
   a{ color:var(--accent); }
   .nbadge{ display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px; padding:0 6px; margin-left:8px; border-radius:10px; background:var(--red); color:#fff; font-size:13px; font-weight:700; vertical-align:middle; }
@@ -598,18 +599,19 @@ function renderDocs(){
     // галочку и удаление — только для готовых к отправке (на проверке); в очереди/отправленным нельзя
     var canPick=(!sent && !queue);
     var pick=canPick?'<label class="pick" onclick="event.stopPropagation()"><input type="checkbox" '+(sel?'checked':'')+' onchange="toggleDoc('+d.row+',this.checked)"></label>':'<span class="pick" style="width:22px;"></span>';
-    var trash=(!sent&&!queue)?'<button class="trash" title="удалить" onclick="event.stopPropagation();docDelete('+d.row+')"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/><path d="M10 11v5M14 11v5"/></svg></button>':'';
+    var trash=(!sent&&!queue)?'<div class="docactions"><button class="trash" onclick="event.stopPropagation();docDelete('+d.row+')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/><path d="M10 11v5M14 11v5"/></svg>удалить</button></div>':'';
     var cls='doccard'+(sent?' sent':'')+(sel?' sel':'')+(queue?' queue':'')+(d.dup?' dup':'');
     var clickable=(!sent&&!queue)?' style="cursor:pointer;"':'';
     var dupb=d.dup?'<div class="dupbadge">возможно дубль</div>':'';
     return '<div class="'+cls+'" id="doc_'+d.row+'">'+pick
+      +'<div style="flex:1;min-width:0;">'
       +'<div class="body"'+clickable+' onclick="'+((!sent&&!queue)?('openDocEdit('+d.row+')'):'')+'">'
       +dupb
       +'<div class="r1"><span class="contr">'+esc(d.contr||(queue?'распознаётся…':'—'))+'</span><span class="sum">'+(d.sum?fmt(d.sum)+' '+esc(d.cur||''):'')+'</span></div>'
       +'<div class="meta">'+esc(d.type||'документ')+(d.docNo?(' №'+esc(d.docNo)):'')+(d.dateIso?(' · '+human(d.dateIso)):'')+'</div>'
       +(d.name?'<div class="meta">'+esc(d.name)+'</div>':'')
-      +'<div class="foot"><span>'+status+' · '+file+'</span>'+trash+'</div>'
-      +'</div></div>';
+      +'<div class="foot"><span>'+status+' · '+file+'</span></div>'
+      +'</div>'+trash+'</div></div>';
   }).join('');
   updateDocSendBar();
 }
