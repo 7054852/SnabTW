@@ -30,12 +30,13 @@
   .card .acts{ display:flex; gap:8px; margin-top:8px; }
   .card .acts button{ margin-top:0; padding:9px; font-size:14px; }
   /* карточка документа */
-  .doccard{ display:flex; gap:10px; align-items:stretch; border:1px solid var(--line); border-radius:12px; padding:0; margin-bottom:10px; overflow:hidden; transition:background .15s,border-color .15s; }
+  .doccard{ position:relative; display:flex; gap:10px; align-items:stretch; border:1px solid var(--line); border-radius:12px; padding:0; margin-bottom:10px; overflow:hidden; transition:background .15s,border-color .15s; }
   .doccard.sel{ background:#e8f0fe; border-color:#1a73e8; }
   .doccard.sent{ background:#f2fbf4; }
   .doccard .pick{ display:flex; align-items:center; padding:0 4px 0 12px; cursor:pointer; }
   .doccard .pick input{ width:22px; height:22px; cursor:pointer; accent-color:#1a73e8; }
   .doccard .body{ flex:1; padding:11px 12px 11px 4px; min-width:0; }
+  .doccard:not(.sent) .body{ padding-right:34px; }
   .doccard .r1{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
   .doccard .r1 .contr{ font-weight:600; font-size:15px; overflow:hidden; text-overflow:ellipsis; }
   .doccard .r1 .sum{ font-weight:700; font-size:15px; white-space:nowrap; }
@@ -43,9 +44,12 @@
   .doccard .foot{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px; }
   .doccard .st-check{ color:#b26a00; font-weight:600; font-size:13px; }
   .doccard .st-sent{ color:#137333; font-weight:600; font-size:13px; }
+  .doccard .st-queue{ color:#1a73e8; font-weight:600; font-size:13px; }
+  .doccard .st-err{ color:#c00; font-weight:600; font-size:13px; }
+  .doccard.queue{ opacity:.75; }
   .doccard .flink{ font-size:13px; }
-  .doccard .trash{ background:none; border:0; color:#c9c9c9; font-size:17px; cursor:pointer; padding:4px 6px; margin:0; line-height:1; transition:color .15s; }
-  .doccard .trash:hover{ color:#d33; }
+  .doccard .trash{ position:absolute; bottom:8px; right:8px; background:none; border:0; color:#cfcfcf; cursor:pointer; padding:5px; margin:0; display:inline-flex; align-items:center; border-radius:8px; transition:color .15s,background .15s; }
+  .doccard .trash:hover{ color:#d33; background:#f7eaea; }
   a{ color:var(--accent); }
   .nbadge{ display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px; padding:0 6px; margin-left:8px; border-radius:10px; background:var(--red); color:#fff; font-size:13px; font-weight:700; vertical-align:middle; }
 </style>
@@ -152,24 +156,35 @@
 <!-- ДОКУМЕНТЫ: добавить -->
 <div id="docAddView" style="display:none;">
   <span class="back" onclick="showDocs()">‹ назад</span>
-  <h2>Новый документ</h2>
-  <div class="fld"><label>Файл (фото или PDF накладной/акта)</label><input id="d_file" type="file" accept="image/*,application/pdf"></div>
-  <button id="d_recognize" class="gray" onclick="docRecognize()" style="margin-bottom:10px;">✨ Распознать документ</button>
-  <div class="msg" id="recogMsg"></div>
+  <h2>Загрузить документы</h2>
+  <div class="hint" style="margin-bottom:10px;">Выберите один или несколько файлов (фото или PDF). Бот распознает их сам — контрагента, номер, дату, сумму. Потом проверите и отправите бухгалтеру.</div>
+  <div class="fld"><input id="d_files" type="file" accept="image/*,application/pdf" multiple></div>
+  <button id="d_upload" class="green" onclick="docUploadAll()">Загрузить и распознать</button>
+  <div class="msg" id="docUpMsg"></div>
+  <div id="docUpProgress" style="margin-top:10px;"></div>
+</div>
+
+<div id="docEditView" style="display:none;">
+  <span class="back" onclick="showDocs()">‹ назад</span>
+  <h2>Проверка документа</h2>
   <div class="fld"><label>Тип документа</label>
-    <select id="d_type"><option>товарная накладная</option><option>ТТН</option><option>акт выполненных работ</option><option>акт</option><option>инвойс</option><option>УПД</option><option>прочее</option></select></div>
-  <div class="fld"><label>Контрагент</label><input id="d_contr" list="d_contrList" placeholder="поставщик"><datalist id="d_contrList"></datalist></div>
+    <select id="e_type"><option>товарная накладная</option><option>ТТН</option><option>акт выполненных работ</option><option>акт</option><option>инвойс</option><option>УПД</option><option>прочее</option></select></div>
+  <div class="fld"><label>Контрагент</label><input id="e_contr" list="e_contrList" placeholder="поставщик"><datalist id="e_contrList"></datalist></div>
   <div class="two">
-    <div class="fld"><label>№ документа</label><input id="d_docno"></div>
-    <div class="fld"><label>Дата</label><input id="d_date" type="date"></div>
+    <div class="fld"><label>№ документа</label><input id="e_docno"></div>
+    <div class="fld"><label>Дата</label><input id="e_date" type="date"></div>
   </div>
   <div class="two">
-    <div class="fld"><label>Сумма</label><input id="d_sum" type="number" step="0.01" inputmode="decimal"></div>
-    <div class="fld"><label>Валюта</label><select id="d_cur"><option>BYN</option><option>EUR</option><option>USD</option><option>RUB</option></select></div>
+    <div class="fld"><label>Сумма</label><input id="e_sum" type="number" step="0.01" inputmode="decimal"></div>
+    <div class="fld"><label>Валюта</label><select id="e_cur"><option>BYN</option><option>EUR</option><option>USD</option><option>RUB</option></select></div>
   </div>
-  <div class="fld"><label>Наименование товара/услуги</label><input id="d_name"></div>
-  <button id="d_send" class="green" onclick="docSubmit()">Сохранить документ</button>
-  <div class="msg" id="docAddMsg"></div>
+  <div class="fld"><label>Наименование товара/услуги</label><input id="e_name"></div>
+  <div style="display:flex;gap:8px;">
+    <button class="gray" onclick="docRetry()" style="flex:1;">↻ Определить заново</button>
+    <button class="green" onclick="docEditSave()" style="flex:2;">Сохранить</button>
+  </div>
+  <div class="msg" id="docEditMsg"></div>
+  <div id="e_filelink" style="margin-top:10px;"></div>
 </div>
 
 <iframe name="sink" id="sink" style="display:none"></iframe>
@@ -201,7 +216,7 @@ function fmt(n){ return (Number(n)||0).toLocaleString('ru-RU',{minimumFractionDi
 function human(iso){ if(!iso) return ''; var p=iso.split('-'); return p.length===3?(p[2]+'.'+p[1]+'.'+p[0]):iso; }
 function setH(id,v){ var el=document.getElementById('h_'+id); if(el) el.value=(v==null?'':v); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-var VIEWS=['menuView','submitView','cashView','approveView','cashApproveView','mineView','invoicesView','docsView','docAddView'];
+var VIEWS=['menuView','submitView','cashView','approveView','cashApproveView','mineView','invoicesView','docsView','docAddView','docEditView'];
 function show(id){ VIEWS.forEach(function(v){ document.getElementById(v).style.display=(v===id?'block':'none'); }); }
 // число-уведомление на кнопке меню (красный кружок справа)
 function setBtnBadge(btnId, label, n){
@@ -465,17 +480,74 @@ function jsonp(qs, onerr){ var s=document.createElement('script'); s.onerror=one
 var docItems=[], docOffset=0, docLoading=false, docContrFilled=false;
 function docsMsg(t,c){ var m=document.getElementById('docsMsg'); if(m){ m.textContent=t; m.className='msg '+(c||''); } }
 function showDocs(){ show('docsView'); docLoading=false; loadDocs(true); }
+function fillDatalist(dlId,list){ var dl=document.getElementById(dlId); if(!dl)return; dl.innerHTML=''; (list||[]).forEach(function(nm){ var o=document.createElement('option'); o.value=nm; dl.appendChild(o); }); }
+function loadDocContractors(){
+  if(docContrFilled || EXEC_URL.indexOf('exec')<0) return;
+  window.fillDocContractors=function(list){ fillDatalist('e_contrList',list); docContrFilled=true; };
+  var s=document.createElement('script'); s.src=EXEC_URL+'?contractors=1&cb=fillDocContractors&t='+Date.now(); document.body.appendChild(s);
+}
 function showDocAdd(){
   show('docAddView');
-  // контрагенты в datalist
-  if(!docContrFilled && EXEC_URL.indexOf('exec')>=0){
-    window.fillDocContractors=function(list){ var dl=document.getElementById('d_contrList'); if(!dl)return; dl.innerHTML=''; (list||[]).forEach(function(nm){ var o=document.createElement('option'); o.value=nm; dl.appendChild(o); }); docContrFilled=true; };
-    var s=document.createElement('script'); s.src=EXEC_URL+'?contractors=1&cb=fillDocContractors&t='+Date.now(); document.body.appendChild(s);
+  document.getElementById('docUpMsg').textContent='';
+  document.getElementById('docUpProgress').innerHTML='';
+  var f=document.getElementById('d_files'); if(f){ f.value='';
+    if(!f._expandBound){ f._expandBound=true; f.addEventListener('change', function(){ if(tg&&tg.expand) setTimeout(function(){ tg.expand(); },100); }); }
   }
-  var dd=document.getElementById('d_date'); if(dd&&!dd.value){ var d=new Date(); dd.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-  var df=document.getElementById('d_file');
-  if(df && !df._expandBound){ df._expandBound=true; df.addEventListener('change', function(){ if(tg && tg.expand) setTimeout(function(){ tg.expand(); }, 100); }); }
 }
+// оркестратор: загрузить все файлы в очередь, затем распознать по одному с прогрессом
+var docUploading=false;
+function docUploadAll(){
+  if(docUploading) return;
+  var files=document.getElementById('d_files').files;
+  if(!files||!files.length){ upMsg('Выберите файлы','err'); return; }
+  if(!initData()){ upMsg('Откройте через бота','err'); return; }
+  for(var i=0;i<files.length;i++){ if(files[i].size>15*1024*1024){ upMsg('Файл «'+files[i].name+'» больше 15 МБ','err'); return; } }
+  docUploading=true; document.getElementById('d_upload').disabled=true;
+  var arr=Array.prototype.slice.call(files);
+  var total=arr.length, uploaded=0;
+  upMsg('Загружаю файлы…'); prog('Загрузка: 0 из '+total);
+  // 1) грузим все в очередь (по одному, чтобы не упереться в размер запроса)
+  var uploadNext=function(idx){
+    if(idx>=arr.length){ afterUpload(total); return; }
+    var f=arr[idx];
+    var rd=new FileReader();
+    rd.onload=function(){
+      var b64=String(rd.result).split(',')[1];
+      var body=new URLSearchParams();
+      body.set('kind','docupload'); body.set('initData',initData());
+      body.set('fileB64',b64); body.set('fileMime',f.type||''); body.set('fileName',f.name||'');
+      fetch(EXEC_URL,{method:'POST',body:body}).then(function(r){return r.json();}).then(function(res){
+        uploaded++; prog('Загрузка: '+uploaded+' из '+total);
+        uploadNext(idx+1);
+      }).catch(function(){ uploadNext(idx+1); });
+    };
+    rd.onerror=function(){ uploadNext(idx+1); };
+    rd.readAsDataURL(f);
+  };
+  uploadNext(0);
+}
+function afterUpload(total){
+  upMsg('Файлы загружены. Распознаю…','ok');
+  var done=0;
+  var processNext=function(){
+    var body=new URLSearchParams();
+    body.set('kind','docprocess'); body.set('initData',initData());
+    fetch(EXEC_URL,{method:'POST',body:body}).then(function(r){return r.json();}).then(function(res){
+      if(res && res.done){ finishUpload(); return; }
+      if(res && res.row){ done++; prog('Распознано: '+done+' (осталось в очереди…)'); }
+      processNext();
+    }).catch(function(){ setTimeout(processNext,1500); });   // сбой сети — повторим, очередь не потеряется
+  };
+  processNext();
+}
+function finishUpload(){
+  docUploading=false; document.getElementById('d_upload').disabled=false;
+  prog('✓ Готово. Все документы распознаны.');
+  upMsg('Готово! Проверьте документы в списке.','ok');
+  setTimeout(function(){ showDocs(); },1500);
+}
+function upMsg(t,c){ var m=document.getElementById('docUpMsg'); if(m){ m.textContent=t; m.className='msg '+(c||''); } }
+function prog(t){ var p=document.getElementById('docUpProgress'); if(p) p.innerHTML='<div class="hint">'+esc(t)+'</div>'; }
 var docReqId=0;
 function loadDocs(reset){
   if(!initData()){ docsMsg('Откройте через бота','err'); return; }
@@ -492,6 +564,9 @@ function loadDocs(reset){
     docOffset=(res.offset||0)+(res.items?res.items.length:0);
     renderDocs();
     document.getElementById('docMore').style.display=res.hasMore?'block':'none';
+    // если есть документы в очереди — обновим список через 4 сек (статусы догонятся)
+    var pending=docItems.some(function(d){ return d.status==='в очереди'||d.status==='распознаётся'; });
+    if(pending){ clearTimeout(window._docPoll); window._docPoll=setTimeout(function(){ if(document.getElementById('docsView').style.display!=='none'){ docLoading=false; loadDocs(true); } },4000); }
   };
   jsonp('docslist=1&offset='+docOffset+'&cb=onDocsList', function(){ docLoading=false; docsMsg('Сеть недоступна','err'); });
 }
@@ -501,19 +576,27 @@ function renderDocs(){
   if(!docItems.length){ box.innerHTML='<div class="hint">Документов пока нет.</div>'; updateDocSendBar(); return; }
   box.innerHTML=docItems.map(function(d){
     var sent=(d.status==='отправлен');
+    var queue=(d.status==='в очереди'||d.status==='распознаётся');
+    var errst=(d.status==='ошибка');
     var sel=!!docChecked[d.row];
     var file=d.file?'<a class="flink" href="'+esc(d.file)+'" target="_blank">файл</a>':'<span class="hint">нет файла</span>';
-    var status=sent?'<span class="st-sent">✓ отправлен</span>':'<span class="st-check">● на проверке</span>';
-    var pick=sent?'':'<label class="pick"><input type="checkbox" '+(sel?'checked':'')+' onchange="toggleDoc('+d.row+',this.checked)"></label>';
-    var trash=sent?'':'<button class="trash" title="удалить" onclick="docDelete('+d.row+')">🗑</button>';
-    var cls='doccard'+(sent?' sent':'')+(sel?' sel':'');
+    var status = sent?'<span class="st-sent">✓ отправлен</span>'
+               : queue?'<span class="st-queue">⏳ '+esc(d.status)+'</span>'
+               : errst?'<span class="st-err">⚠ ошибка распознавания</span>'
+               : '<span class="st-check">● на проверке</span>';
+    // галочку и удаление — только для готовых к отправке (на проверке); в очереди/отправленным нельзя
+    var canPick=(!sent && !queue);
+    var pick=canPick?'<label class="pick" onclick="event.stopPropagation()"><input type="checkbox" '+(sel?'checked':'')+' onchange="toggleDoc('+d.row+',this.checked)"></label>':'<span class="pick" style="width:22px;"></span>';
+    var trash=(!sent&&!queue)?'<button class="trash" title="удалить" onclick="event.stopPropagation();docDelete('+d.row+')"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/><path d="M10 11v5M14 11v5"/></svg></button>':'';
+    var cls='doccard'+(sent?' sent':'')+(sel?' sel':'')+(queue?' queue':'');
+    var clickable=(!sent&&!queue)?' style="cursor:pointer;"':'';
     return '<div class="'+cls+'" id="doc_'+d.row+'">'+pick
-      +'<div class="body">'
-      +'<div class="r1"><span class="contr">'+esc(d.contr||'—')+'</span><span class="sum">'+fmt(d.sum)+' '+esc(d.cur||'')+'</span></div>'
+      +'<div class="body"'+clickable+' onclick="'+((!sent&&!queue)?('openDocEdit('+d.row+')'):'')+'">'
+      +'<div class="r1"><span class="contr">'+esc(d.contr||(queue?'распознаётся…':'—'))+'</span><span class="sum">'+(d.sum?fmt(d.sum)+' '+esc(d.cur||''):'')+'</span></div>'
       +'<div class="meta">'+esc(d.type||'документ')+(d.docNo?(' №'+esc(d.docNo)):'')+(d.dateIso?(' · '+human(d.dateIso)):'')+'</div>'
       +(d.name?'<div class="meta">'+esc(d.name)+'</div>':'')
-      +'<div class="foot"><span>'+status+' · '+file+'</span>'+trash+'</div>'
-      +'</div></div>';
+      +'<div class="foot"><span>'+status+' · '+file+'</span></div>'
+      +'</div>'+trash+'</div>';
   }).join('');
   updateDocSendBar();
 }
@@ -552,65 +635,72 @@ function docDelete(row){
     docLoading=false; loadDocs(true);
   }).catch(function(e){ docsMsg('Ошибка сети: '+e.message,'err'); });
 }
-function docRecognize(){
-  var f=document.getElementById('d_file').files[0];
-  if(!f){ rMsg('Сначала выберите файл','err'); return; }
-  if(f.size>15*1024*1024){ rMsg('Файл больше 15 МБ','err'); return; }
-  if(!initData()){ rMsg('Откройте через бота','err'); return; }
-  var btn=document.getElementById('d_recognize'); btn.disabled=true; rMsg('Распознаю документ… это займёт несколько секунд');
-  var rd=new FileReader();
-  rd.onload=function(){
-    var b64=String(rd.result).split(',')[1];
-    var body=new URLSearchParams();
-    body.set('kind','docparse'); body.set('initData',initData());
-    body.set('fileB64',b64); body.set('fileMime',f.type||''); body.set('fileName',f.name||'');
-    fetch(EXEC_URL, { method:'POST', body:body })
-      .then(function(r){ return r.json(); })
-      .then(function(res){
-        btn.disabled=false;
-        if(!res||!res.ok){ rMsg((res&&res.error)||'Не удалось распознать','err'); return; }
-        var x=res.fields||{};
-        if(x.type) setSelect('d_type',x.type);
-        if(x.contr) document.getElementById('d_contr').value=x.contr;
-        if(x.docNo) document.getElementById('d_docno').value=x.docNo;
-        if(x.dateIso) document.getElementById('d_date').value=x.dateIso;
-        if(x.sum) document.getElementById('d_sum').value=x.sum;
-        if(x.cur) setSelect('d_cur',x.cur);
-        if(x.name) document.getElementById('d_name').value=x.name;
-        rMsg('Готово! Проверьте поля и сохраните.','ok');
-      })
-      .catch(function(e){ btn.disabled=false; rMsg('Ошибка сети: '+e.message,'err'); });
-  };
-  rd.onerror=function(){ btn.disabled=false; rMsg('Не прочитать файл','err'); };
-  rd.readAsDataURL(f);
+// открыть редактор документа по клику на карточку
+var docEditRow=0;
+function openDocEdit(row){
+  var d=null; for(var i=0;i<docItems.length;i++){ if(docItems[i].row===row){ d=docItems[i]; break; } }
+  if(!d) return;
+  if(d.status==='отправлен') return;   // отправленный не редактируем
+  docEditRow=row;
+  loadDocContractors();
+  show('docEditView');
+  setSelect('e_type',d.type||'товарная накладная');
+  document.getElementById('e_contr').value=d.contr||'';
+  document.getElementById('e_docno').value=d.docNo||'';
+  document.getElementById('e_date').value=d.dateIso||'';
+  document.getElementById('e_sum').value=d.sum||'';
+  setSelect('e_cur',d.cur||'BYN');
+  document.getElementById('e_name').value=d.name||'';
+  document.getElementById('docEditMsg').textContent='';
+  var fl=document.getElementById('e_filelink');
+  fl.innerHTML=d.file?'<a class="flink" href="'+esc(d.file)+'" target="_blank">открыть файл</a>':'<span class="hint">файл не приложен</span>';
+  var st=d.status;
+  if(st==='распознаётся'||st==='в очереди') document.getElementById('docEditMsg').textContent='Документ ещё распознаётся, подождите или заполните вручную.';
+  if(st==='ошибка') { document.getElementById('docEditMsg').textContent='Не удалось распознать — заполните вручную или нажмите «Определить заново».'; document.getElementById('docEditMsg').className='msg err'; }
 }
-function rMsg(t,c){ var m=document.getElementById('recogMsg'); if(m){ m.textContent=t; m.className='msg '+(c||''); } }
+function docEditSave(){
+  var contr=(document.getElementById('e_contr').value||'').trim();
+  var sum=num(val('e_sum'));
+  if(!contr){ deMsg('Укажите контрагента','err'); return; }
+  if(sum<=0){ deMsg('Укажите сумму','err'); return; }
+  if(!initData()){ deMsg('Откройте через бота','err'); return; }
+  deMsg('Сохраняю…');
+  var body=new URLSearchParams();
+  body.set('kind','docupdate'); body.set('initData',initData()); body.set('row',docEditRow);
+  body.set('type',val('e_type')); body.set('contr',contr); body.set('docNo',val('e_docno'));
+  body.set('dateIso',val('e_date')); body.set('sum',sum); body.set('cur',val('e_cur')); body.set('name',val('e_name'));
+  fetch(EXEC_URL,{method:'POST',body:body}).then(function(r){return r.json();}).then(function(res){
+    if(!res||!res.ok){ deMsg((res&&res.error)||'Ошибка','err'); return; }
+    deMsg('Сохранено','ok'); docLoading=false; setTimeout(function(){ showDocs(); },700);
+  }).catch(function(e){ deMsg('Ошибка сети: '+e.message,'err'); });
+}
+function docRetry(){
+  if(!docEditRow) return;
+  deMsg('Определяю заново…');
+  var body=new URLSearchParams();
+  body.set('kind','docretry'); body.set('initData',initData()); body.set('row',docEditRow);
+  fetch(EXEC_URL,{method:'POST',body:body}).then(function(r){return r.json();}).then(function(res){
+    if(!res||!res.ok){ deMsg((res&&res.error)||'Не распознано','err'); return; }
+    // подтянуть свежие поля — перезагрузим список и переоткроем редактор
+    deMsg('Готово, обновляю…','ok'); docLoading=false;
+    reloadThenEdit(docEditRow);
+  }).catch(function(e){ deMsg('Ошибка сети: '+e.message,'err'); });
+}
+function reloadThenEdit(row){
+  window.onDocsList=function(res){
+    docLoading=false;
+    if(res&&res.ok!==false){ docItems=res.items||[]; docOffset=(res.items?res.items.length:0); }
+    openDocEdit(row);
+  };
+  docItems=[]; docOffset=0; docLoading=true;
+  jsonp('docslist=1&offset=0&cb=onDocsList', function(){ docLoading=false; });
+}
+function deMsg(t,c){ var m=document.getElementById('docEditMsg'); if(m){ m.textContent=t; m.className='msg '+(c||''); } }
 function setSelect(id,val){
   var s=document.getElementById(id); if(!s) return;
   var v=String(val).toLowerCase().trim();
   for(var i=0;i<s.options.length;i++){ if(s.options[i].value.toLowerCase().trim()===v){ s.selectedIndex=i; return; } }
-  // нет точного совпадения — добавим опцию (для типа)
-  if(id==='d_type'){ var o=document.createElement('option'); o.value=val; o.textContent=val; s.appendChild(o); s.value=val; }
-}
-
-function docSubmit(){
-  var contr=(document.getElementById('d_contr').value||'').trim();
-  var sum=num(val('d_sum'));
-  if(!contr){ dMsg('Укажите контрагента','err'); return; }
-  if(sum<=0){ dMsg('Укажите сумму','err'); return; }
-  if(!initData()){ dMsg('Откройте через бота','err'); return; }
-  document.getElementById('d_send').disabled=true; dMsg('Сохраняю...');
-  clearH(); setH('kind','docsave'); setH('initData',initData());
-  setH('type',val('d_type')); setH('contr',contr); setH('docNo',val('d_docno'));
-  setH('dateIso',val('d_date')); setH('sum',sum); setH('cur',val('d_cur')); setH('name',val('d_name'));
-  withFile('d_file', function(){ submitHidden(); dMsg('Готово! Документ сохранён и отправлен бухгалтеру.','ok'); resetDocForm(); setTimeout(function(){ showDocs(); },2800); },
-                     function(m){ dMsg(m,'err'); document.getElementById('d_send').disabled=false; });
-}
-function dMsg(t,c){ var m=document.getElementById('docAddMsg'); if(m){ m.textContent=t; m.className='msg '+(c||''); } }
-function resetDocForm(){
-  ['d_docno','d_sum','d_name'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
-  var f=document.getElementById('d_file'); if(f) f.value='';
-  document.getElementById('d_send').disabled=false;
+  var o=document.createElement('option'); o.value=val; o.textContent=val; s.appendChild(o); s.value=val;
 }
 
 function withFile(inputId, ok, err){
