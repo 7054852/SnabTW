@@ -31,12 +31,14 @@
   .card .acts button{ margin-top:0; padding:9px; font-size:14px; }
   /* карточка документа */
   .doccard{ position:relative; display:flex; gap:10px; align-items:stretch; border:1px solid var(--line); border-radius:12px; padding:0; margin-bottom:10px; overflow:hidden; transition:background .15s,border-color .15s; }
+  .doccard.dup{ border-color:#e8a33d; background:#fff8ec; }
+  .doccard .dupbadge{ display:inline-block; background:#e8a33d; color:#fff; font-size:11px; font-weight:600; padding:1px 7px; border-radius:6px; margin-bottom:4px; }
   .doccard.sel{ background:#e8f0fe; border-color:#1a73e8; }
   .doccard.sent{ background:#f2fbf4; }
   .doccard .pick{ display:flex; align-items:center; padding:0 4px 0 12px; cursor:pointer; }
   .doccard .pick input{ width:22px; height:22px; cursor:pointer; accent-color:#1a73e8; }
   .doccard .body{ flex:1; padding:11px 12px 11px 4px; min-width:0; }
-  .doccard:not(.sent) .body{ padding-right:34px; }
+  .doccard .foot{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px; }
   .doccard .r1{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
   .doccard .r1 .contr{ font-weight:600; font-size:15px; overflow:hidden; text-overflow:ellipsis; }
   .doccard .r1 .sum{ font-weight:700; font-size:15px; white-space:nowrap; }
@@ -48,7 +50,7 @@
   .doccard .st-err{ color:#c00; font-weight:600; font-size:13px; }
   .doccard.queue{ opacity:.75; }
   .doccard .flink{ font-size:13px; }
-  .doccard .trash{ position:absolute; bottom:8px; right:8px; background:none; border:0; color:#cfcfcf; cursor:pointer; padding:5px; margin:0; display:inline-flex; align-items:center; border-radius:8px; transition:color .15s,background .15s; }
+  .doccard .trash{ background:none; border:0; color:#cfcfcf; cursor:pointer; padding:4px 6px; margin:0; display:inline-flex; align-items:center; border-radius:8px; flex-shrink:0; transition:color .15s,background .15s; }
   .doccard .trash:hover{ color:#d33; background:#f7eaea; }
   a{ color:var(--accent); }
   .nbadge{ display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px; padding:0 6px; margin-left:8px; border-radius:10px; background:var(--red); color:#fff; font-size:13px; font-weight:700; vertical-align:middle; }
@@ -157,8 +159,8 @@
 <div id="docAddView" style="display:none;">
   <span class="back" onclick="showDocs()">‹ назад</span>
   <h2>Загрузить документы</h2>
-  <div class="hint" style="margin-bottom:10px;">Выберите один или несколько файлов (фото или PDF). Бот распознает их сам — контрагента, номер, дату, сумму. Потом проверите и отправите бухгалтеру.</div>
-  <div class="fld"><input id="d_files" type="file" accept="image/*,application/pdf" multiple></div>
+  <div class="hint" style="margin-bottom:10px;">Выберите один или несколько файлов — PDF, фото или Word. Бот распознает их сам: контрагента, номер, дату, сумму. Потом проверите и отправите бухгалтеру.</div>
+  <div class="fld"><input id="d_files" type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" multiple></div>
   <button id="d_upload" class="green" onclick="docUploadAll()">Загрузить и распознать</button>
   <div class="msg" id="docUpMsg"></div>
   <div id="docUpProgress" style="margin-top:10px;"></div>
@@ -528,23 +530,32 @@ function docUploadAll(){
 }
 function afterUpload(total){
   upMsg('Файлы загружены. Распознаю…','ok');
-  var done=0;
+  var done=0, errors=0;
   var processNext=function(){
     var body=new URLSearchParams();
     body.set('kind','docprocess'); body.set('initData',initData());
     fetch(EXEC_URL,{method:'POST',body:body}).then(function(r){return r.json();}).then(function(res){
-      if(res && res.done){ finishUpload(); return; }
-      if(res && res.row){ done++; prog('Распознано: '+done+' (осталось в очереди…)'); }
+      if(res && res.done){ finishUpload(done,errors); return; }
+      if(res && res.row){
+        if(res.ok===false){ errors++; } else { done++; }
+        prog('Распознано: '+done+(errors?(' · ошибок: '+errors):'')+' (в очереди…)');
+      }
       processNext();
     }).catch(function(){ setTimeout(processNext,1500); });   // сбой сети — повторим, очередь не потеряется
   };
   processNext();
 }
-function finishUpload(){
+function finishUpload(done,errors){
   docUploading=false; document.getElementById('d_upload').disabled=false;
-  prog('✓ Готово. Все документы распознаны.');
-  upMsg('Готово! Проверьте документы в списке.','ok');
-  setTimeout(function(){ showDocs(); },1500);
+  if(errors){
+    prog('Готово. Распознано: '+done+', не удалось: '+errors+'.');
+    upMsg('Распознано '+done+', с ошибкой '+errors+'. Документы с ошибкой отмечены — откройте и заполните вручную или нажмите «Определить заново».','err');
+    setTimeout(function(){ showDocs(); },2600);
+  } else {
+    prog('✓ Готово. Все документы распознаны.');
+    upMsg('Готово! Проверьте документы в списке.','ok');
+    setTimeout(function(){ showDocs(); },1500);
+  }
 }
 function upMsg(t,c){ var m=document.getElementById('docUpMsg'); if(m){ m.textContent=t; m.className='msg '+(c||''); } }
 function prog(t){ var p=document.getElementById('docUpProgress'); if(p) p.innerHTML='<div class="hint">'+esc(t)+'</div>'; }
@@ -588,15 +599,17 @@ function renderDocs(){
     var canPick=(!sent && !queue);
     var pick=canPick?'<label class="pick" onclick="event.stopPropagation()"><input type="checkbox" '+(sel?'checked':'')+' onchange="toggleDoc('+d.row+',this.checked)"></label>':'<span class="pick" style="width:22px;"></span>';
     var trash=(!sent&&!queue)?'<button class="trash" title="удалить" onclick="event.stopPropagation();docDelete('+d.row+')"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/><path d="M10 11v5M14 11v5"/></svg></button>':'';
-    var cls='doccard'+(sent?' sent':'')+(sel?' sel':'')+(queue?' queue':'');
+    var cls='doccard'+(sent?' sent':'')+(sel?' sel':'')+(queue?' queue':'')+(d.dup?' dup':'');
     var clickable=(!sent&&!queue)?' style="cursor:pointer;"':'';
+    var dupb=d.dup?'<div class="dupbadge">возможно дубль</div>':'';
     return '<div class="'+cls+'" id="doc_'+d.row+'">'+pick
       +'<div class="body"'+clickable+' onclick="'+((!sent&&!queue)?('openDocEdit('+d.row+')'):'')+'">'
+      +dupb
       +'<div class="r1"><span class="contr">'+esc(d.contr||(queue?'распознаётся…':'—'))+'</span><span class="sum">'+(d.sum?fmt(d.sum)+' '+esc(d.cur||''):'')+'</span></div>'
       +'<div class="meta">'+esc(d.type||'документ')+(d.docNo?(' №'+esc(d.docNo)):'')+(d.dateIso?(' · '+human(d.dateIso)):'')+'</div>'
       +(d.name?'<div class="meta">'+esc(d.name)+'</div>':'')
-      +'<div class="foot"><span>'+status+' · '+file+'</span></div>'
-      +'</div>'+trash+'</div>';
+      +'<div class="foot"><span>'+status+' · '+file+'</span>'+trash+'</div>'
+      +'</div></div>';
   }).join('');
   updateDocSendBar();
 }
