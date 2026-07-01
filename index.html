@@ -126,6 +126,7 @@
   <span class="back" onclick="showMenu()">‹ назад</span>
   <h2>Документы</h2>
   <button class="green" onclick="showDocAdd()" style="margin-bottom:10px;">➕ Добавить документ</button>
+  <div id="docSendBar" style="display:none;margin-bottom:10px;"><button id="docSendBtn" class="green" onclick="docSendSelected()" style="background:#1a73e8;">📤 Отправить бухгалтеру</button></div>
   <div class="hint" style="margin-bottom:6px;">Последние загруженные накладные и акты.</div>
   <div id="docList"></div><div class="msg" id="docsMsg"></div>
   <button class="gray" id="docMore" onclick="loadDocs(false)" style="display:none;">Загрузить ещё 25</button>
@@ -462,7 +463,7 @@ var docReqId=0;
 function loadDocs(reset){
   if(!initData()){ docsMsg('Откройте через бота','err'); return; }
   if(docLoading) return;
-  if(reset){ docItems=[]; docOffset=0; document.getElementById('docList').innerHTML=''; }
+  if(reset){ docItems=[]; docOffset=0; docChecked={}; document.getElementById('docList').innerHTML=''; }
   docLoading=true; docsMsg('Загружаю...');
   var myReq=++docReqId;
   window.onDocsList=function(res){
@@ -477,16 +478,57 @@ function loadDocs(reset){
   };
   jsonp('docslist=1&offset='+docOffset+'&cb=onDocsList', function(){ docLoading=false; docsMsg('Сеть недоступна','err'); });
 }
+var docChecked={};
 function renderDocs(){
   var box=document.getElementById('docList');
-  if(!docItems.length){ box.innerHTML='<div class="hint">Документов пока нет.</div>'; return; }
+  if(!docItems.length){ box.innerHTML='<div class="hint">Документов пока нет.</div>'; updateDocSendBar(); return; }
   box.innerHTML=docItems.map(function(d){
     var file=d.file?'<a href="'+esc(d.file)+'" target="_blank">файл</a>':'<span class="hint">нет файла</span>';
-    return '<div class="card"><div class="top"><span class="nm">'+esc(d.contr||'—')+'</span><span class="nm">'+fmt(d.sum)+' '+esc(d.cur||'')+'</span></div>'
+    var sent=(d.status==='отправлен');
+    var badge=sent?'<span style="color:#137333;font-weight:600;">✓ отправлен</span>'
+                  :'<span style="color:#b26a00;font-weight:600;">● на проверке</span>';
+    var head='<div class="top"><span class="nm">'+esc(d.contr||'—')+'</span><span class="nm">'+fmt(d.sum)+' '+esc(d.cur||'')+'</span></div>';
+    var chk=sent?'':'<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" '+(docChecked[d.row]?'checked':'')+' onchange="toggleDoc('+d.row+',this.checked)"> выбрать</label>';
+    var del=sent?'':'<button class="mini" onclick="docDelete('+d.row+')" style="color:#c00;">удалить</button>';
+    return '<div class="card"'+(sent?' style="background:#f2fbf4;"':'')+'>'+head
       +'<div class="sm">'+esc(d.type||'документ')+(d.docNo?(' №'+esc(d.docNo)):'')+(d.dateIso?(' · '+human(d.dateIso)):'')+'</div>'
       +(d.name?'<div class="sm">'+esc(d.name)+'</div>':'')
-      +'<div class="row2">'+file+'</div></div>';
+      +'<div class="row2" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">'
+      +'<span>'+badge+' · '+file+'</span>'
+      +'<span style="display:flex;gap:10px;align-items:center;">'+chk+del+'</span></div></div>';
   }).join('');
+  updateDocSendBar();
+}
+function toggleDoc(row,on){ if(on) docChecked[row]=true; else delete docChecked[row]; updateDocSendBar(); }
+function updateDocSendBar(){
+  var bar=document.getElementById('docSendBar'); if(!bar) return;
+  var n=Object.keys(docChecked).length;
+  bar.style.display=n?'block':'none';
+  var b=document.getElementById('docSendBtn'); if(b) b.textContent='📤 Отправить бухгалтеру ('+n+')';
+}
+function docSendSelected(){
+  var rows=Object.keys(docChecked); if(!rows.length) return;
+  if(!initData()){ docsMsg('Откройте через бота','err'); return; }
+  var btn=document.getElementById('docSendBtn'); btn.disabled=true; docsMsg('Отправляю бухгалтеру...');
+  var body=new URLSearchParams();
+  body.set('kind','docsend'); body.set('initData',initData()); body.set('rows',rows.join(','));
+  fetch(EXEC_URL,{method:'POST',body:body}).then(function(r){return r.json();}).then(function(res){
+    btn.disabled=false;
+    if(!res||!res.ok){ docsMsg((res&&res.error)||'Ошибка отправки','err'); return; }
+    docsMsg('Отправлено бухгалтеру: '+(res.sent||0),'ok');
+    docChecked={}; docLoading=false; loadDocs(true);
+  }).catch(function(e){ btn.disabled=false; docsMsg('Ошибка сети: '+e.message,'err'); });
+}
+function docDelete(row){
+  if(!confirm('Удалить документ? (он ещё не отправлен бухгалтеру)')) return;
+  if(!initData()){ docsMsg('Откройте через бота','err'); return; }
+  delete docChecked[row];
+  var body=new URLSearchParams();
+  body.set('kind','docdel'); body.set('initData',initData()); body.set('row',row);
+  fetch(EXEC_URL,{method:'POST',body:body}).then(function(r){return r.json();}).then(function(res){
+    if(!res||!res.ok){ docsMsg((res&&res.error)||'Не удалить','err'); return; }
+    docLoading=false; loadDocs(true);
+  }).catch(function(e){ docsMsg('Ошибка сети: '+e.message,'err'); });
 }
 function docRecognize(){
   var f=document.getElementById('d_file').files[0];
