@@ -43,6 +43,7 @@
   <button class="green" id="btnApproveInv" onclick="showApprove()" style="display:none;">✅ Одобрить счета</button>
   <button class="green" id="btnApproveCash" onclick="showCashApprove()" style="display:none;">✅ Наличные отчёты</button>
   <button class="gray" id="btnInvoices" onclick="showInvoices()" style="display:none;">📋 Все счета</button>
+  <button class="gray" id="btnDocs" onclick="showDocs()" style="display:none;">📄 Документы</button>
   <button class="gray" id="btnMine" onclick="showMine()" style="display:none;">🗑 Мои отчёты (удалить)</button>
   <div class="msg" id="menuMsg"></div>
 </div>
@@ -120,6 +121,37 @@
   <button class="gray" id="invMore" onclick="loadInvoices(false)" style="display:none;">Загрузить ещё 25</button>
 </div>
 
+<!-- ДОКУМЕНТЫ: реестр -->
+<div id="docsView" style="display:none;">
+  <span class="back" onclick="showMenu()">‹ назад</span>
+  <h2>Документы</h2>
+  <button class="green" onclick="showDocAdd()" style="margin-bottom:10px;">➕ Добавить документ</button>
+  <div class="hint" style="margin-bottom:6px;">Последние загруженные накладные и акты.</div>
+  <div id="docList"></div><div class="msg" id="docsMsg"></div>
+  <button class="gray" id="docMore" onclick="loadDocs(false)" style="display:none;">Загрузить ещё 25</button>
+</div>
+
+<!-- ДОКУМЕНТЫ: добавить -->
+<div id="docAddView" style="display:none;">
+  <span class="back" onclick="showDocs()">‹ назад</span>
+  <h2>Новый документ</h2>
+  <div class="fld"><label>Файл (фото или PDF накладной/акта)</label><input id="d_file" type="file" accept="image/*,application/pdf"></div>
+  <div class="fld"><label>Тип документа</label>
+    <select id="d_type"><option>товарная накладная</option><option>ТТН</option><option>акт выполненных работ</option><option>акт</option><option>инвойс</option><option>УПД</option><option>прочее</option></select></div>
+  <div class="fld"><label>Контрагент</label><input id="d_contr" list="d_contrList" placeholder="поставщик"><datalist id="d_contrList"></datalist></div>
+  <div class="two">
+    <div class="fld"><label>№ документа</label><input id="d_docno"></div>
+    <div class="fld"><label>Дата</label><input id="d_date" type="date"></div>
+  </div>
+  <div class="two">
+    <div class="fld"><label>Сумма</label><input id="d_sum" type="number" step="0.01" inputmode="decimal"></div>
+    <div class="fld"><label>Валюта</label><select id="d_cur"><option>BYN</option><option>EUR</option><option>USD</option><option>RUB</option></select></div>
+  </div>
+  <div class="fld"><label>Наименование товара/услуги</label><input id="d_name"></div>
+  <button id="d_send" class="green" onclick="docSubmit()">Сохранить документ</button>
+  <div class="msg" id="docAddMsg"></div>
+</div>
+
 <iframe name="sink" id="sink" style="display:none"></iframe>
 <form id="hform" method="POST" target="sink" style="display:none">
   <input type="hidden" name="kind" id="h_kind">
@@ -148,7 +180,7 @@ function fmt(n){ return (Number(n)||0).toLocaleString('ru-RU',{minimumFractionDi
 function human(iso){ if(!iso) return ''; var p=iso.split('-'); return p.length===3?(p[2]+'.'+p[1]+'.'+p[0]):iso; }
 function setH(id,v){ document.getElementById('h_'+id).value=(v==null?'':v); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-var VIEWS=['menuView','submitView','cashView','approveView','cashApproveView','mineView','invoicesView'];
+var VIEWS=['menuView','submitView','cashView','approveView','cashApproveView','mineView','invoicesView','docsView','docAddView'];
 function show(id){ VIEWS.forEach(function(v){ document.getElementById(v).style.display=(v===id?'block':'none'); }); }
 // число-уведомление на кнопке меню (красный кружок справа)
 function setBtnBadge(btnId, label, n){
@@ -181,6 +213,7 @@ function applyRole(r, silent){
     document.getElementById('btnApproveInv').style.display = r.canApprove?'block':'none';
     document.getElementById('btnApproveCash').style.display = r.canApprove?'block':'none';
     document.getElementById('btnInvoices').style.display = r.canApprove?'block':'none';
+    document.getElementById('btnDocs').style.display = r.canApprove?'block':'none';
     document.getElementById('btnMine').style.display = (r.canSubmit && !r.canApprove)?'block':'none';
     if(r.canApprove){ setBtnBadge('btnApproveInv','✅ Одобрить счета', r.pendingInv||0); setBtnBadge('btnApproveCash','✅ Наличные отчёты', r.pendingCash||0); }
     document.getElementById('cashHint').textContent = r.canApprove
@@ -407,11 +440,71 @@ function clearH(){ ['kind','contr','type','docNo','docDateIso','sum','payDateIso
 function submitHidden(){ var f=document.getElementById('hform'); f.action=EXEC_URL; f.submit(); }
 function fade(id){ var c=document.getElementById(id); if(c) c.style.opacity='0.4'; }
 function jsonp(qs, onerr){ var s=document.createElement('script'); s.onerror=onerr; s.src=EXEC_URL+'?'+qs+'&initData='+encodeURIComponent(initData())+'&t='+Date.now(); document.body.appendChild(s); }
+/* ===== ДОКУМЕНТЫ (директор) ===== */
+var docItems=[], docOffset=0, docLoading=false, docContrFilled=false;
+function docsMsg(t,c){ var m=document.getElementById('docsMsg'); if(m){ m.textContent=t; m.className='msg '+(c||''); } }
+function showDocs(){ show('docsView'); loadDocs(true); }
+function showDocAdd(){
+  show('docAddView');
+  // контрагенты в datalist
+  if(!docContrFilled && EXEC_URL.indexOf('exec')>=0){
+    window.fillDocContractors=function(list){ var dl=document.getElementById('d_contrList'); if(!dl)return; dl.innerHTML=''; (list||[]).forEach(function(nm){ var o=document.createElement('option'); o.value=nm; dl.appendChild(o); }); docContrFilled=true; };
+    var s=document.createElement('script'); s.src=EXEC_URL+'?contractors=1&cb=fillDocContractors&t='+Date.now(); document.body.appendChild(s);
+  }
+  var dd=document.getElementById('d_date'); if(dd&&!dd.value){ var d=new Date(); dd.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+}
+function loadDocs(reset){
+  if(!initData()){ docsMsg('Откройте через бота','err'); return; }
+  if(docLoading) return;
+  if(reset){ docItems=[]; docOffset=0; document.getElementById('docList').innerHTML=''; }
+  docLoading=true; docsMsg('Загружаю...');
+  window.onDocsList=function(res){
+    docLoading=false;
+    if(!res||res.ok===false){ docsMsg((res&&res.error)||'Ошибка','err'); return; }
+    docsMsg('');
+    docItems=docItems.concat(res.items||[]);
+    docOffset=(res.offset||0)+(res.items?res.items.length:0);
+    renderDocs();
+    document.getElementById('docMore').style.display=res.hasMore?'block':'none';
+  };
+  jsonp('docslist=1&offset='+docOffset+'&cb=onDocsList', function(){ docLoading=false; docsMsg('Сеть недоступна','err'); });
+}
+function renderDocs(){
+  var box=document.getElementById('docList');
+  if(!docItems.length){ box.innerHTML='<div class="hint">Документов пока нет.</div>'; return; }
+  box.innerHTML=docItems.map(function(d){
+    var file=d.file?'<a href="'+esc(d.file)+'" target="_blank">файл</a>':'<span class="hint">нет файла</span>';
+    return '<div class="card"><div class="top"><span class="nm">'+esc(d.contr||'—')+'</span><span class="nm">'+fmt(d.sum)+' '+esc(d.cur||'')+'</span></div>'
+      +'<div class="sm">'+esc(d.type||'документ')+(d.docNo?(' №'+esc(d.docNo)):'')+(d.dateIso?(' · '+human(d.dateIso)):'')+'</div>'
+      +(d.name?'<div class="sm">'+esc(d.name)+'</div>':'')
+      +'<div class="row2">'+file+'</div></div>';
+  }).join('');
+}
+function docSubmit(){
+  var contr=(document.getElementById('d_contr').value||'').trim();
+  var sum=num(val('d_sum'));
+  if(!contr){ dMsg('Укажите контрагента','err'); return; }
+  if(sum<=0){ dMsg('Укажите сумму','err'); return; }
+  if(!initData()){ dMsg('Откройте через бота','err'); return; }
+  document.getElementById('d_send').disabled=true; dMsg('Сохраняю...');
+  clearH(); setH('kind','docsave'); setH('initData',initData());
+  setH('type',val('d_type')); setH('contr',contr); setH('docNo',val('d_docno'));
+  setH('dateIso',val('d_date')); setH('sum',sum); setH('cur',val('d_cur')); setH('name',val('d_name'));
+  withFile('d_file', function(){ submitHidden(); dMsg('Готово! Документ сохранён и отправлен бухгалтеру.','ok'); resetDocForm(); setTimeout(function(){ showDocs(); },1200); },
+                     function(m){ dMsg(m,'err'); document.getElementById('d_send').disabled=false; });
+}
+function dMsg(t,c){ var m=document.getElementById('docAddMsg'); if(m){ m.textContent=t; m.className='msg '+(c||''); } }
+function resetDocForm(){
+  ['d_docno','d_sum','d_name'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  var f=document.getElementById('d_file'); if(f) f.value='';
+  document.getElementById('d_send').disabled=false;
+}
+
 function withFile(inputId, ok, err){
   var fi=document.getElementById(inputId);
   if(fi.files && fi.files[0]){
     var f=fi.files[0];
-    if(f.size>8*1024*1024){ err('Файл больше 8 МБ — уменьшите'); return; }
+    if(f.size>15*1024*1024){ err('Файл больше 15 МБ — уменьшите'); return; }
     var rd=new FileReader();
     rd.onload=function(){ setH('fileB64',rd.result.split(',')[1]); setH('fileName',f.name); setH('fileMime',f.type||'application/octet-stream'); ok(); };
     rd.onerror=function(){ err('Не удалось прочитать файл'); };
