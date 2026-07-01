@@ -164,6 +164,7 @@
   <input type="hidden" name="reimburse" id="h_reimburse"><input type="hidden" name="spender" id="h_spender">
   <input type="hidden" name="fileB64" id="h_fileB64"><input type="hidden" name="fileName" id="h_fileName"><input type="hidden" name="fileMime" id="h_fileMime">
   <input type="hidden" name="statya" id="h_statya">
+  <input type="hidden" name="dateIso" id="h_dateIso"><input type="hidden" name="cur" id="h_cur">
   <input type="hidden" name="id" id="h_id">
 </form>
 
@@ -178,7 +179,7 @@ function val(id){ var el=document.getElementById(id); return el ? (el.value||'')
 function num(s){ return Number(String(s).replace(',','.'))||0; }
 function fmt(n){ return (Number(n)||0).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function human(iso){ if(!iso) return ''; var p=iso.split('-'); return p.length===3?(p[2]+'.'+p[1]+'.'+p[0]):iso; }
-function setH(id,v){ document.getElementById('h_'+id).value=(v==null?'':v); }
+function setH(id,v){ var el=document.getElementById('h_'+id); if(el) el.value=(v==null?'':v); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 var VIEWS=['menuView','submitView','cashView','approveView','cashApproveView','mineView','invoicesView','docsView','docAddView'];
 function show(id){ VIEWS.forEach(function(v){ document.getElementById(v).style.display=(v===id?'block':'none'); }); }
@@ -436,7 +437,7 @@ function invReject(id){
 }
 
 /* ===== общее ===== */
-function clearH(){ ['kind','contr','type','docNo','docDateIso','sum','payDateIso','wallet','note','cat','name','reimburse','spender','fileB64','fileName','fileMime','statya','id'].forEach(function(f){ setH(f,''); }); }
+function clearH(){ ['kind','contr','type','docNo','docDateIso','sum','payDateIso','wallet','note','cat','name','reimburse','spender','fileB64','fileName','fileMime','statya','dateIso','cur','id'].forEach(function(f){ setH(f,''); }); }
 function submitHidden(){ var f=document.getElementById('hform'); f.action=EXEC_URL; f.submit(); }
 function fade(id){ var c=document.getElementById(id); if(c) c.style.opacity='0.4'; }
 function jsonp(qs, onerr){ var s=document.createElement('script'); s.onerror=onerr; s.src=EXEC_URL+'?'+qs+'&initData='+encodeURIComponent(initData())+'&t='+Date.now(); document.body.appendChild(s); }
