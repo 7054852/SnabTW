@@ -171,7 +171,7 @@
   <span class="back" onclick="showDocs()">‹ назад</span>
   <h2>Проверка документа</h2>
   <div class="fld"><label>Тип документа</label>
-    <select id="e_type"><option>товарная накладная</option><option>ТТН</option><option>акт выполненных работ</option><option>акт</option><option>инвойс</option><option>УПД</option><option>прочее</option></select></div>
+    <select id="e_type"></select></div>
   <div class="fld"><label>Контрагент</label><input id="e_contr" list="e_contrList" placeholder="поставщик"><datalist id="e_contrList"></datalist></div>
   <div class="two">
     <div class="fld"><label>№ документа</label><input id="e_docno"></div>
@@ -255,6 +255,7 @@ function applyRole(r, silent){
     document.getElementById('btnDocs').style.display = r.canApprove?'block':'none';
     document.getElementById('btnMine').style.display = (r.canSubmit && !r.canApprove)?'block':'none';
     if(r.canApprove){ setBtnBadge('btnApproveInv','✅ Одобрить счета', r.pendingInv||0); setBtnBadge('btnApproveCash','✅ Наличные отчёты', r.pendingCash||0); }
+    if(r.docTypes && r.docTypes.length){ DOC_TYPES=r.docTypes; buildTypeSelect(); }
     document.getElementById('cashHint').textContent = r.canApprove
       ? 'Ваш расход запишется сразу.' : 'Отчёт уйдёт директору на подтверждение.';
     if(!silent) show('menuView');
@@ -481,6 +482,13 @@ function fade(id){ var c=document.getElementById(id); if(c) c.style.opacity='0.4
 function jsonp(qs, onerr){ var s=document.createElement('script'); s.onerror=onerr; s.src=EXEC_URL+'?'+qs+'&initData='+encodeURIComponent(initData())+'&t='+Date.now(); document.body.appendChild(s); }
 /* ===== ДОКУМЕНТЫ (директор) ===== */
 var docItems=[], docOffset=0, docLoading=false, docContrFilled=false;
+var DOC_TYPES=['ТН','ТТН','Акт','УПД','Инвойс','Чек','Прочее'];
+function buildTypeSelect(){
+  var s=document.getElementById('e_type'); if(!s) return;
+  var cur=s.value;
+  s.innerHTML=DOC_TYPES.map(function(t){ return '<option>'+esc(t)+'</option>'; }).join('');
+  if(cur) setSelect('e_type',cur);
+}
 function docsMsg(t,c){ var m=document.getElementById('docsMsg'); if(m){ m.textContent=t; m.className='msg '+(c||''); } }
 function showDocs(){ show('docsView'); docLoading=false; loadDocs(true); }
 function fillDatalist(dlId,list){ var dl=document.getElementById(dlId); if(!dl)return; dl.innerHTML=''; (list||[]).forEach(function(nm){ var o=document.createElement('option'); o.value=nm; dl.appendChild(o); }); }
@@ -659,7 +667,8 @@ function openDocEdit(row){
   docEditRow=row;
   loadDocContractors();
   show('docEditView');
-  setSelect('e_type',d.type||'товарная накладная');
+  buildTypeSelect();
+  setSelect('e_type',d.type||DOC_TYPES[0]);
   document.getElementById('e_contr').value=d.contr||'';
   document.getElementById('e_docno').value=d.docNo||'';
   document.getElementById('e_date').value=d.dateIso||'';
