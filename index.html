@@ -453,6 +453,8 @@ function showDocAdd(){
     var s=document.createElement('script'); s.src=EXEC_URL+'?contractors=1&cb=fillDocContractors&t='+Date.now(); document.body.appendChild(s);
   }
   var dd=document.getElementById('d_date'); if(dd&&!dd.value){ var d=new Date(); dd.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  var df=document.getElementById('d_file');
+  if(df && !df._expandBound){ df._expandBound=true; df.addEventListener('change', function(){ if(tg && tg.expand) setTimeout(function(){ tg.expand(); }, 100); }); }
 }
 function loadDocs(reset){
   if(!initData()){ docsMsg('Откройте через бота','err'); return; }
@@ -463,6 +465,7 @@ function loadDocs(reset){
     docLoading=false;
     if(!res||res.ok===false){ docsMsg((res&&res.error)||'Ошибка','err'); return; }
     docsMsg('');
+    window._docsRaw=(res.rawRows!=null)?res.rawRows:null;
     docItems=docItems.concat(res.items||[]);
     docOffset=(res.offset||0)+(res.items?res.items.length:0);
     renderDocs();
@@ -491,7 +494,7 @@ function docSubmit(){
   clearH(); setH('kind','docsave'); setH('initData',initData());
   setH('type',val('d_type')); setH('contr',contr); setH('docNo',val('d_docno'));
   setH('dateIso',val('d_date')); setH('sum',sum); setH('cur',val('d_cur')); setH('name',val('d_name'));
-  withFile('d_file', function(){ submitHidden(); dMsg('Готово! Документ сохранён и отправлен бухгалтеру.','ok'); resetDocForm(); setTimeout(function(){ showDocs(); },1200); },
+  withFile('d_file', function(){ submitHidden(); dMsg('Готово! Документ сохранён и отправлен бухгалтеру.','ok'); resetDocForm(); setTimeout(function(){ showDocs(); },2500); },
                      function(m){ dMsg(m,'err'); document.getElementById('d_send').disabled=false; });
 }
 function dMsg(t,c){ var m=document.getElementById('docAddMsg'); if(m){ m.textContent=t; m.className='msg '+(c||''); } }
