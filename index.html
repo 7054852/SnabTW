@@ -702,7 +702,7 @@ function openDocEdit(row){
   fl.innerHTML=d.file?'<a class="flink" href="'+esc(d.file)+'" target="_blank">открыть файл</a>':'<span class="hint">файл не приложен</span>';
   var st=d.status;
   if(st==='распознаётся'||st==='в очереди') document.getElementById('docEditMsg').textContent='Документ ещё распознаётся, подождите или заполните вручную.';
-  if(st==='ошибка') { document.getElementById('docEditMsg').textContent='Не удалось распознать — заполните вручную или нажмите «Определить заново».'; document.getElementById('docEditMsg').className='msg err'; }
+  if(st==='ошибка') { document.getElementById('docEditMsg').textContent='Не удалось распознать'+(d.err?(': '+d.err):'')+'. Заполните вручную или нажмите «Определить заново».'; document.getElementById('docEditMsg').className='msg err'; }
 }
 function docEditSave(){
   var contr=(document.getElementById('e_contr').value||'').trim();
