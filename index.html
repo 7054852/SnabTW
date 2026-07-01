@@ -136,6 +136,8 @@
   <span class="back" onclick="showDocs()">‹ назад</span>
   <h2>Новый документ</h2>
   <div class="fld"><label>Файл (фото или PDF накладной/акта)</label><input id="d_file" type="file" accept="image/*,application/pdf"></div>
+  <button id="d_recognize" class="gray" onclick="docRecognize()" style="margin-bottom:10px;">✨ Распознать документ</button>
+  <div class="msg" id="recogMsg"></div>
   <div class="fld"><label>Тип документа</label>
     <select id="d_type"><option>товарная накладная</option><option>ТТН</option><option>акт выполненных работ</option><option>акт</option><option>инвойс</option><option>УПД</option><option>прочее</option></select></div>
   <div class="fld"><label>Контрагент</label><input id="d_contr" list="d_contrList" placeholder="поставщик"><datalist id="d_contrList"></datalist></div>
@@ -486,6 +488,47 @@ function renderDocs(){
       +'<div class="row2">'+file+'</div></div>';
   }).join('');
 }
+function docRecognize(){
+  var f=document.getElementById('d_file').files[0];
+  if(!f){ rMsg('Сначала выберите файл','err'); return; }
+  if(f.size>15*1024*1024){ rMsg('Файл больше 15 МБ','err'); return; }
+  if(!initData()){ rMsg('Откройте через бота','err'); return; }
+  var btn=document.getElementById('d_recognize'); btn.disabled=true; rMsg('Распознаю документ… это займёт несколько секунд');
+  var rd=new FileReader();
+  rd.onload=function(){
+    var b64=String(rd.result).split(',')[1];
+    var body=new URLSearchParams();
+    body.set('kind','docparse'); body.set('initData',initData());
+    body.set('fileB64',b64); body.set('fileMime',f.type||''); body.set('fileName',f.name||'');
+    fetch(EXEC_URL, { method:'POST', body:body })
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        btn.disabled=false;
+        if(!res||!res.ok){ rMsg((res&&res.error)||'Не удалось распознать','err'); return; }
+        var x=res.fields||{};
+        if(x.type) setSelect('d_type',x.type);
+        if(x.contr) document.getElementById('d_contr').value=x.contr;
+        if(x.docNo) document.getElementById('d_docno').value=x.docNo;
+        if(x.dateIso) document.getElementById('d_date').value=x.dateIso;
+        if(x.sum) document.getElementById('d_sum').value=x.sum;
+        if(x.cur) setSelect('d_cur',x.cur);
+        if(x.name) document.getElementById('d_name').value=x.name;
+        rMsg('Готово! Проверьте поля и сохраните.','ok');
+      })
+      .catch(function(e){ btn.disabled=false; rMsg('Ошибка сети: '+e.message,'err'); });
+  };
+  rd.onerror=function(){ btn.disabled=false; rMsg('Не прочитать файл','err'); };
+  rd.readAsDataURL(f);
+}
+function rMsg(t,c){ var m=document.getElementById('recogMsg'); if(m){ m.textContent=t; m.className='msg '+(c||''); } }
+function setSelect(id,val){
+  var s=document.getElementById(id); if(!s) return;
+  var v=String(val).toLowerCase().trim();
+  for(var i=0;i<s.options.length;i++){ if(s.options[i].value.toLowerCase().trim()===v){ s.selectedIndex=i; return; } }
+  // нет точного совпадения — добавим опцию (для типа)
+  if(id==='d_type'){ var o=document.createElement('option'); o.value=val; o.textContent=val; s.appendChild(o); s.value=val; }
+}
+
 function docSubmit(){
   var contr=(document.getElementById('d_contr').value||'').trim();
   var sum=num(val('d_sum'));
