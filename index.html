@@ -72,6 +72,7 @@
   <button class="gray" id="btnInvoices" onclick="showInvoices()" style="display:none;">📋 Все счета</button>
   <button class="gray" id="btnDocs" onclick="showDocs()" style="display:none;">📄 Документы</button>
   <button class="gray" id="btnMine" onclick="showMine()" style="display:none;">🗑 Мои отчёты (удалить)</button>
+  <button class="green" id="btnProd" onclick="showProd()" style="display:none;">🏭 Производство</button>
   <div class="msg" id="menuMsg"></div>
 </div>
 
@@ -198,6 +199,20 @@
   <div id="e_filelink" style="margin-top:10px;"></div>
 </div>
 
+<!-- ПРОИЗВОДСТВО -->
+<div id="productionView" style="display:none;">
+  <span class="back" onclick="showMenu()">‹ назад</span>
+  <h2>Заказы на производство</h2>
+  <div style="margin-bottom:8px;">
+    <span class="dtab active" id="pf_active" onclick="setProdFilter('active')">В работе</span>
+    <span class="dtab" id="pf_new" onclick="setProdFilter('новый')">Новые</span>
+    <span class="dtab" id="pf_ready" onclick="setProdFilter('готово')">Готовые</span>
+    <span class="dtab" id="pf_all" onclick="setProdFilter('all')">Все</span>
+  </div>
+  <div id="prList"></div><div class="msg" id="prMsg"></div>
+  <button class="gray" onclick="loadOrders()">Обновить</button>
+</div>
+
 <iframe name="sink" id="sink" style="display:none"></iframe>
 <form id="hform" method="POST" target="sink" style="display:none">
   <input type="hidden" name="kind" id="h_kind">
@@ -212,6 +227,7 @@
   <input type="hidden" name="statya" id="h_statya">
   <input type="hidden" name="dateIso" id="h_dateIso"><input type="hidden" name="cur" id="h_cur">
   <input type="hidden" name="id" id="h_id">
+  <input type="hidden" name="orderId" id="h_orderId"><input type="hidden" name="status" id="h_status">
 </form>
 
 <script>
@@ -227,7 +243,7 @@ function fmt(n){ return (Number(n)||0).toLocaleString('ru-RU',{minimumFractionDi
 function human(iso){ if(!iso) return ''; var p=iso.split('-'); return p.length===3?(p[2]+'.'+p[1]+'.'+p[0]):iso; }
 function setH(id,v){ var el=document.getElementById('h_'+id); if(el) el.value=(v==null?'':v); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-var VIEWS=['menuView','submitView','cashView','approveView','cashApproveView','mineView','invoicesView','docsView','docAddView','docEditView'];
+var VIEWS=['menuView','submitView','cashView','approveView','cashApproveView','mineView','invoicesView','docsView','docAddView','docEditView','productionView'];
 function show(id){ VIEWS.forEach(function(v){ document.getElementById(v).style.display=(v===id?'block':'none'); }); }
 // число-уведомление на кнопке меню (красный кружок справа)
 function setBtnBadge(btnId, label, n){
@@ -262,6 +278,7 @@ function applyRole(r, silent){
     document.getElementById('btnInvoices').style.display = r.canApprove?'block':'none';
     document.getElementById('btnDocs').style.display = r.canApprove?'block':'none';
     document.getElementById('btnMine').style.display = (r.canSubmit && !r.canApprove)?'block':'none';
+    document.getElementById('btnProd').style.display = (r.canSubmit || r.canApprove)?'block':'none';
     if(r.canApprove){ setBtnBadge('btnApproveInv','✅ Одобрить счета', r.pendingInv||0); setBtnBadge('btnApproveCash','✅ Наличные отчёты', r.pendingCash||0); }
     if(r.docTypes && r.docTypes.length){ DOC_TYPES=r.docTypes; buildTypeSelect(); }
     document.getElementById('cashHint').textContent = r.canApprove
@@ -297,6 +314,41 @@ function showApprove(){ show('approveView'); loadInbox(); }
 function showCashApprove(){ show('cashApproveView'); loadCashApprove(); }
 function showMine(){ show('mineView'); loadMine(); }
 function showInvoices(){ show('invoicesView'); loadInvoices(true); }
+
+/* ===== ПРОИЗВОДСТВО ===== */
+var prodFilter='active';
+function showProd(){ show('productionView'); loadOrders(); }
+function prMsg(t,c){ var m=document.getElementById('prMsg'); m.textContent=t; m.className='msg '+(c||''); }
+function setProdFilter(f){
+  prodFilter=f;
+  [['active','pf_active'],['новый','pf_new'],['готово','pf_ready'],['all','pf_all']].forEach(function(p){
+    var b=document.getElementById(p[1]); if(b) b.className='dtab'+(p[0]===f?' active':'');
+  });
+  loadOrders();
+}
+function loadOrders(){
+  if(!initData()){ prMsg('Откройте через бота','err'); return; }
+  prMsg('Загружаю...');
+  window.onOrders=function(res){ if(!res||res.ok===false){ prMsg((res&&res.error)||'Ошибка','err'); return; } prMsg(''); renderOrders(res.items||[]); };
+  jsonp('orders=1&filter='+encodeURIComponent(prodFilter)+'&cb=onOrders', function(){ prMsg('Сеть недоступна','err'); });
+}
+function renderOrders(items){
+  var box=document.getElementById('prList');
+  if(!items.length){ box.innerHTML='<div class="hint">Нет заказов.</div>'; return; }
+  box.innerHTML=items.map(function(o){
+    var lines=(o.items||[]).map(function(it){ return '<div class="sm">'+esc(it.equip||'')+' '+esc(it.model||'')+' <b>× '+(it.qty||0)+'</b></div>'; }).join('') || '<div class="hint">позиции не заданы</div>';
+    var meta=[]; if(o.client) meta.push(esc(o.client)); if(o.shipDateIso) meta.push('🚚 '+human(o.shipDateIso)); if(o.city) meta.push(esc(o.city));
+    var comment=o.comment?('<div class="sm">📝 '+esc(o.comment)+'</div>'):'';
+    var acts='<div class="acts">'
+      +ordBtn(o,'в работе','gold','В работу')
+      +ordBtn(o,'готово','green','Готово')
+      +ordBtn(o,'отгружено','gray','Отгружено')+'</div>';
+    return '<div class="card" id="or_'+esc(o.id)+'"><div class="top"><span class="nm">№'+esc(o.num)+'</span><span class="sm">'+esc(o.status)+'</span></div>'
+      +'<div class="sm">'+meta.join(' · ')+'</div>'+comment+lines+acts+'</div>';
+  }).join('');
+}
+function ordBtn(o,status,cls,label){ var dis=(o.status===status)?' disabled':''; return '<button class="'+(cls||'')+'"'+dis+' onclick="setOrderStatus(\''+esc(o.id)+'\',\''+status+'\')">'+label+'</button>'; }
+function setOrderStatus(id,status){ prMsg('Сохраняю...'); clearH(); setH('kind','ordstatus'); setH('initData',initData()); setH('orderId',id); setH('status',status); submitHidden(); fade('or_'+id); setTimeout(loadOrders,1300); }
 
 /* ===== ПОДАЧА СЧЁТА ===== */
 var submitInited=false;
@@ -484,7 +536,7 @@ function invReject(id){
 }
 
 /* ===== общее ===== */
-function clearH(){ ['kind','contr','type','docNo','docDateIso','sum','payDateIso','wallet','note','cat','name','reimburse','spender','fileB64','fileName','fileMime','statya','dateIso','cur','id'].forEach(function(f){ setH(f,''); }); }
+function clearH(){ ['kind','contr','type','docNo','docDateIso','sum','payDateIso','wallet','note','cat','name','reimburse','spender','fileB64','fileName','fileMime','statya','dateIso','cur','id','orderId','status'].forEach(function(f){ setH(f,''); }); }
 function submitHidden(){ var f=document.getElementById('hform'); f.action=EXEC_URL; f.submit(); }
 function fade(id){ var c=document.getElementById(id); if(c) c.style.opacity='0.4'; }
 function jsonp(qs, onerr){ var s=document.createElement('script'); s.onerror=onerr; s.src=EXEC_URL+'?'+qs+'&initData='+encodeURIComponent(initData())+'&t='+Date.now(); document.body.appendChild(s); }
