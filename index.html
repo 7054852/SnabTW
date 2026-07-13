@@ -607,7 +607,9 @@ function renderInvoices(){
     var file=x.file?'<a href="'+esc(x.file)+'" target="_blank">файл</a>':'<span class="hint">нет файла</span>';
     var dt=x.docDateIso?human(x.docDateIso):'';
     var pay=x.payDateIso?(' · оплата '+human(x.payDateIso)):'';
-    var head='<div class="card" id="iv_'+esc(x.id)+'"><div class="top"><span class="nm">'+esc(x.contr||'—')+'</span><span class="nm">'+fmt(x.sum)+'</span></div>'
+    var dupCls=x.dup?' style="border-color:#e8a33d;background:#fff8ec;"':'';
+    var dupb=x.dup?'<div class="dupbadge">возможно дубль</div>':'';
+    var head='<div class="card" id="iv_'+esc(x.id)+'"'+dupCls+'>'+dupb+'<div class="top"><span class="nm">'+esc(x.contr||'—')+'</span><span class="nm">'+fmt(x.sum)+'</span></div>'
       +'<div class="sm">'+esc(x.type||'счёт')+(x.docNo?(' №'+esc(x.docNo)):'')+(dt?(' · '+dt):'')+pay+'</div>'
       +'<div class="row2">'+invStatusChip(x)+' · '+file+'</div>';
     if(x.recognizing){
