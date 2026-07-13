@@ -616,7 +616,8 @@ function renderInvoices(){
       head+='<div class="row2"><span class="hint">🔍 распознаётся…</span></div>';
     } else {
       if(x.pending && ROLE.canApprove){
-        head+='<div class="row2"><span class="hint">оплатить:</span><input type="date" id="ivd_'+esc(x.id)+'" value="'+esc(x.payDateIso||'')+'"></div>'
+        head+='<div class="row2"><span class="hint">оплатить:</span><input type="date" id="ivd_'+esc(x.id)+'" value="'+esc(x.payDateIso||'')+'" onchange="invCheckBalance(\''+esc(x.id)+'\','+(Number(x.sum)||0)+',\''+esc(x.wallet||'ООО BYN')+'\')"></div>'
+          +'<div class="hint" id="ivbal_'+esc(x.id)+'" style="margin:2px 0 6px;"></div>'
           +'<div class="fld" style="margin-top:8px;"><label>Статья расхода (обязательно)</label><input id="ivs_'+esc(x.id)+'" list="ivsl_'+esc(x.id)+'" placeholder="поиск статьи" autocomplete="off">'+statyaListHtml('ivsl_'+esc(x.id))+'</div>'
           +'<div class="acts"><button class="green" onclick="invApprove(\''+esc(x.id)+'\')">Одобрить</button><button class="redb" onclick="invReject(\''+esc(x.id)+'\')">Отклонить</button></div>';
       }
@@ -628,6 +629,26 @@ function renderInvoices(){
     }
     return head+'</div>';
   }).join('');
+  // подсказка по наличию денег на дату оплаты — для каждого счёта на одобрении
+  invItems.forEach(function(x){ if(x.pending && !x.recognizing && ROLE.canApprove) invCheckBalance(x.id, Number(x.sum)||0, x.wallet||'ООО BYN'); });
+}
+// прогноз: сколько будет денег на дату оплаты и сколько останется после оплаты этого счёта
+function invCheckBalance(id, sum, wallet){
+  var di=document.getElementById('ivd_'+id), el=document.getElementById('ivbal_'+id);
+  if(!di||!el) return;
+  var date=di.value; if(!date){ el.textContent=''; return; }
+  el.innerHTML='<span class="hint">считаю остаток…</span>';
+  var cb='ivbal_'+String(id).replace(/[^a-zA-Z0-9_]/g,'');
+  window[cb]=function(res){
+    if(!res||!res.ok){ el.textContent=''; return; }
+    var col=res.enough?'#137333':'#c00';
+    el.innerHTML='<span style="color:'+col+';font-weight:600;">'+(res.enough?'✓':'⚠')+' на '+human(date)+' будет '+fmt(res.proj)+' '+esc(res.cur||'BYN')
+      +' · после оплаты '+fmt(res.after)+(res.enough?'':' — денег не хватает')+'</span>';
+  };
+  var s=document.createElement('script');
+  s.onerror=function(){ el.textContent=''; };
+  s.src=EXEC_URL+'?inbalance=1&date='+encodeURIComponent(date)+'&sum='+encodeURIComponent(sum)+'&wallet='+encodeURIComponent(wallet||'ООО BYN')+'&cb='+cb+'&initData='+encodeURIComponent(initData())+'&t='+Date.now();
+  document.body.appendChild(s);
 }
 function invApprove(id){
   var statya=val('ivs_'+id);
