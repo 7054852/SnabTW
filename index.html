@@ -255,7 +255,7 @@ function fmt(n){ return (Number(n)||0).toLocaleString('ru-RU',{minimumFractionDi
 function human(iso){ if(!iso) return ''; var p=iso.split('-'); return p.length===3?(p[2]+'.'+p[1]+'.'+p[0]):iso; }
 function setH(id,v){ var el=document.getElementById('h_'+id); if(el) el.value=(v==null?'':v); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-var VIEWS=['menuView','submitView','cashView','approveView','cashApproveView','mineView','invoicesView','docsView','docAddView','docEditView','productionView'];
+var VIEWS=['menuView','submitView','cashView','approveView','cashApproveView','mineView','invoicesView','invAddView','docsView','docAddView','docEditView','productionView'];
 function show(id){ VIEWS.forEach(function(v){ document.getElementById(v).style.display=(v===id?'block':'none'); }); }
 // число-уведомление на кнопке меню (красный кружок справа)
 function setBtnBadge(btnId, label, n){
