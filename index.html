@@ -517,6 +517,10 @@ function renderInvoices(){
         +'<div class="fld" style="margin-top:8px;"><label>Статья расхода (обязательно)</label><input id="ivs_'+esc(x.id)+'" list="ivsl_'+esc(x.id)+'" placeholder="поиск статьи" autocomplete="off">'+statyaListHtml('ivsl_'+esc(x.id))+'</div>'
         +'<div class="acts"><button class="green" onclick="invApprove(\''+esc(x.id)+'\')">Одобрить</button><button class="redb" onclick="invReject(\''+esc(x.id)+'\')">Отклонить</button></div>';
     }
+    if(!x.paid){   // оплаченный счёт удалять/заменять нельзя
+      head+='<div class="acts"><button class="redb" onclick="invDelete(\''+esc(x.id)+'\')">🗑 Удалить</button>'
+        +'<button class="gray" onclick="invReplace(\''+esc(x.id)+'\')">🔁 Заменить</button></div>';
+    }
     return head+'</div>';
   }).join('');
 }
@@ -533,6 +537,19 @@ function invReject(id){
   invMsg('Отклоняю...');
   clearH(); setH('kind','reject'); setH('initData',initData()); setH('id',id);
   submitHidden(); fade('iv_'+id); setTimeout(function(){ loadInvoices(true); },1600);
+}
+function invDelete(id){
+  if(!confirm('Удалить счёт из системы? Если он уже одобрен — удалится и созданная запись расхода (если не оплачена).'))return;
+  invMsg('Удаляю...');
+  clearH(); setH('kind','indelete'); setH('initData',initData()); setH('id',id);
+  submitHidden(); fade('iv_'+id); setTimeout(function(){ loadInvoices(true); },1600);
+}
+function invReplace(id){
+  if(!confirm('Заменить счёт на новый? Старый удалится, откроется форма загрузки нового.'))return;
+  invMsg('Удаляю старый...');
+  clearH(); setH('kind','indelete'); setH('initData',initData()); setH('id',id);
+  submitHidden(); fade('iv_'+id);
+  setTimeout(function(){ invMsg(''); showSubmit(); },1400);
 }
 
 /* ===== общее ===== */
