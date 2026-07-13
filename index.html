@@ -65,11 +65,9 @@
 <!-- РАЗВИЛКА -->
 <div id="menuView" style="display:none;">
   <h2>Финансы — заявки</h2>
-  <button onclick="showSubmit()">📄 Подать счёт на оплату</button>
+  <button id="btnInvoices" onclick="showInvoices()">📋 Счета</button>
   <button class="gold" onclick="showCash()">💵 Наличный отчёт</button>
-  <button class="green" id="btnApproveInv" onclick="showApprove()" style="display:none;">✅ Одобрить счета</button>
   <button class="green" id="btnApproveCash" onclick="showCashApprove()" style="display:none;">✅ Наличные отчёты</button>
-  <button class="gray" id="btnInvoices" onclick="showInvoices()" style="display:none;">📋 Все счета</button>
   <button class="gray" id="btnDocs" onclick="showDocs()" style="display:none;">📄 Документы</button>
   <button class="gray" id="btnMine" onclick="showMine()" style="display:none;">🗑 Мои отчёты (удалить)</button>
   <button class="green" id="btnProd" onclick="showProd()" style="display:none;">🏭 Производство</button>
@@ -143,10 +141,24 @@
 <!-- ВСЕ СЧЕТА -->
 <div id="invoicesView" style="display:none;">
   <span class="back" onclick="showMenu()">‹ назад</span>
-  <h2>Все счета</h2>
-  <div class="hint" style="margin-bottom:8px;">Сначала неоплаченные (старые сверху), затем оплаченные.</div>
+  <h2>Счета</h2>
+  <button class="green" onclick="showInvUpload()" style="margin-bottom:10px;">⬆️ Загрузить счета</button>
+  <div id="invQueueBar" class="hint" style="display:none;margin-bottom:8px;color:#1a73e8;font-weight:600;"></div>
+  <div class="hint" style="margin-bottom:8px;">Сверху — на одобрении, затем неоплаченные, затем оплаченные.</div>
   <div id="invList"></div><div class="msg" id="invMsg"></div>
   <button class="gray" id="invMore" onclick="loadInvoices(false)" style="display:none;">Загрузить ещё 25</button>
+</div>
+
+<!-- СЧЕТА: загрузить пачкой -->
+<div id="invAddView" style="display:none;">
+  <span class="back" onclick="showInvoices()">‹ назад</span>
+  <h2>Загрузить счета</h2>
+  <div class="hint" style="margin-bottom:10px;">Выберите один или несколько файлов — PDF, фото или Word. Распознаются сами: поставщик, номер, дата, сумма. Потом в списке проверите и одобрите.</div>
+  <div class="fld"><input id="i_files" type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" multiple></div>
+  <button id="i_upload" class="green" onclick="invUploadAll()">Загрузить и распознать</button>
+  <div class="msg" id="invUpMsg"></div>
+  <div id="invUpProgress" style="margin-top:10px;"></div>
+  <div class="hint" style="margin-top:16px;">Счёт без файла? <a onclick="showSubmit()" style="cursor:pointer;text-decoration:underline;">добавить вручную</a></div>
 </div>
 
 <!-- ДОКУМЕНТЫ: реестр -->
@@ -273,13 +285,12 @@ var ROLE={canSubmit:false,canApprove:false};
 function applyRole(r, silent){
   if(r&&r.ok){
     ROLE.canSubmit=!!r.canSubmit; ROLE.canApprove=!!r.canApprove;
-    document.getElementById('btnApproveInv').style.display = r.canApprove?'block':'none';
     document.getElementById('btnApproveCash').style.display = r.canApprove?'block':'none';
-    document.getElementById('btnInvoices').style.display = r.canApprove?'block':'none';
     document.getElementById('btnDocs').style.display = r.canApprove?'block':'none';
     document.getElementById('btnMine').style.display = (r.canSubmit && !r.canApprove)?'block':'none';
     document.getElementById('btnProd').style.display = (r.canSubmit || r.canApprove)?'block':'none';
-    if(r.canApprove){ setBtnBadge('btnApproveInv','✅ Одобрить счета', r.pendingInv||0); setBtnBadge('btnApproveCash','✅ Наличные отчёты', r.pendingCash||0); }
+    setBtnBadge('btnInvoices','📋 Счета', r.pendingInv||0);   // значок = сколько ждут одобрения
+    if(r.canApprove){ setBtnBadge('btnApproveCash','✅ Наличные отчёты', r.pendingCash||0); }
     if(r.docTypes && r.docTypes.length){ DOC_TYPES=r.docTypes; buildTypeSelect(); }
     document.getElementById('cashHint').textContent = r.canApprove
       ? 'Ваш расход запишется сразу.' : 'Отчёт уйдёт директору на подтверждение.';
@@ -518,8 +529,69 @@ function loadInvoices(reset){
     invOffset = (res.offset||0) + (res.items?res.items.length:0);
     renderInvoices();
     document.getElementById('invMore').style.display = res.hasMore ? 'block' : 'none';
+    updateInvQueueBar();
+    if(invItems.some(function(d){ return d.recognizing; })){   // пока распознаётся — обновляем список
+      clearTimeout(window._invPoll);
+      window._invPoll=setTimeout(function(){ if(document.getElementById('invoicesView').style.display!=='none') loadInvoices(true); },4000);
+    }
   };
   jsonp('invoices=1&offset='+invOffset+'&cb=onInvoices', function(){ invLoading=false; invMsg('Сеть недоступна','err'); });
+}
+var MINIBTN='width:auto;padding:5px 11px;font-size:12px;font-weight:600;background:#eef0f3;border:0;border-radius:8px;color:#4a5060;cursor:pointer;';
+// ── загрузка счетов пачкой ──
+function showInvUpload(){ show('invAddView'); var f=document.getElementById('i_files'); if(f) f.value=''; invUpMsg(''); document.getElementById('invUpProgress').innerHTML=''; }
+function invUpMsg(t,c){ var m=document.getElementById('invUpMsg'); if(m){ m.textContent=t||''; m.className='msg '+(c||''); } }
+function invProg(t){ var p=document.getElementById('invUpProgress'); if(p) p.innerHTML=t?('<div class="hint">'+esc(t)+'</div>'):''; }
+var invUploading=false;
+function invUploadAll(){
+  var files=document.getElementById('i_files').files;
+  if(!files||!files.length){ invUpMsg('Выберите файлы','err'); return; }
+  if(!initData()){ invUpMsg('Откройте через бота','err'); return; }
+  for(var i=0;i<files.length;i++){ if(files[i].size>15*1024*1024){ invUpMsg('Файл «'+files[i].name+'» больше 15 МБ','err'); return; } }
+  invUploading=true; document.getElementById('i_upload').disabled=true;
+  var arr=Array.prototype.slice.call(files), total=arr.length, up=0;
+  invUpMsg('Загружаю…'); invProg('Загрузка: 0 из '+total);
+  var next=function(idx){
+    if(idx>=arr.length){
+      invUploading=false; document.getElementById('i_upload').disabled=false;
+      invUpMsg(''); invProg('');
+      showInvoices();          // назад в список — заглушки видны
+      startInvProcessing();    // распознавание в фоне
+      return;
+    }
+    var f=arr[idx], rd=new FileReader();
+    rd.onload=function(){
+      var b64=String(rd.result).split(',')[1];
+      var body=new URLSearchParams();
+      body.set('kind','inupload'); body.set('initData',initData());
+      body.set('fileB64',b64); body.set('fileMime',f.type||''); body.set('fileName',f.name||'');
+      fetch(EXEC_URL,{method:'POST',body:body}).then(function(r){return r.json();}).then(function(){ up++; invProg('Загрузка: '+up+' из '+total); next(idx+1); }).catch(function(){ next(idx+1); });
+    };
+    rd.onerror=function(){ next(idx+1); };
+    rd.readAsDataURL(f);
+  };
+  next(0);
+}
+var invBgRunning=false;
+function startInvProcessing(){
+  if(invBgRunning) return; invBgRunning=true;
+  var step=function(){
+    var body=new URLSearchParams(); body.set('kind','inprocess'); body.set('initData',initData());
+    fetch(EXEC_URL,{method:'POST',body:body}).then(function(r){return r.json();}).then(function(res){
+      updateInvQueueBar();
+      if(res && res.done){ invBgRunning=false; if(document.getElementById('invoicesView').style.display!=='none') loadInvoices(true); return; }
+      step();
+    }).catch(function(){ setTimeout(step,2000); });
+  };
+  step();
+}
+function updateInvQueueBar(){
+  var bar=document.getElementById('invQueueBar'); if(!bar||!initData()) return;
+  var body=new URLSearchParams(); body.set('kind','inqueueleft'); body.set('initData',initData());
+  fetch(EXEC_URL,{method:'POST',body:body}).then(function(r){return r.json();}).then(function(res){
+    var n=(res&&res.left)||0;
+    if(n>0){ bar.style.display='block'; bar.textContent='🔍 Распознаётся счетов: '+n+'…'; } else bar.style.display='none';
+  }).catch(function(){});
 }
 function invStatusChip(x){
   var c, bg;
@@ -538,14 +610,19 @@ function renderInvoices(){
     var head='<div class="card" id="iv_'+esc(x.id)+'"><div class="top"><span class="nm">'+esc(x.contr||'—')+'</span><span class="nm">'+fmt(x.sum)+'</span></div>'
       +'<div class="sm">'+esc(x.type||'счёт')+(x.docNo?(' №'+esc(x.docNo)):'')+(dt?(' · '+dt):'')+pay+'</div>'
       +'<div class="row2">'+invStatusChip(x)+' · '+file+'</div>';
-    if(x.pending){
-      head+='<div class="row2"><span class="hint">оплатить:</span><input type="date" id="ivd_'+esc(x.id)+'" value="'+esc(x.payDateIso||'')+'"></div>'
-        +'<div class="fld" style="margin-top:8px;"><label>Статья расхода (обязательно)</label><input id="ivs_'+esc(x.id)+'" list="ivsl_'+esc(x.id)+'" placeholder="поиск статьи" autocomplete="off">'+statyaListHtml('ivsl_'+esc(x.id))+'</div>'
-        +'<div class="acts"><button class="green" onclick="invApprove(\''+esc(x.id)+'\')">Одобрить</button><button class="redb" onclick="invReject(\''+esc(x.id)+'\')">Отклонить</button></div>';
-    }
-    if(!x.paid){   // оплаченный счёт удалять/заменять нельзя
-      head+='<div class="acts"><button class="redb" onclick="invDelete(\''+esc(x.id)+'\')">🗑 Удалить</button>'
-        +'<button class="gray" onclick="invReplace(\''+esc(x.id)+'\')">🔁 Заменить</button></div>';
+    if(x.recognizing){
+      head+='<div class="row2"><span class="hint">🔍 распознаётся…</span></div>';
+    } else {
+      if(x.pending && ROLE.canApprove){
+        head+='<div class="row2"><span class="hint">оплатить:</span><input type="date" id="ivd_'+esc(x.id)+'" value="'+esc(x.payDateIso||'')+'"></div>'
+          +'<div class="fld" style="margin-top:8px;"><label>Статья расхода (обязательно)</label><input id="ivs_'+esc(x.id)+'" list="ivsl_'+esc(x.id)+'" placeholder="поиск статьи" autocomplete="off">'+statyaListHtml('ivsl_'+esc(x.id))+'</div>'
+          +'<div class="acts"><button class="green" onclick="invApprove(\''+esc(x.id)+'\')">Одобрить</button><button class="redb" onclick="invReject(\''+esc(x.id)+'\')">Отклонить</button></div>';
+      }
+      if(!x.paid && ROLE.canApprove){   // мелкие действия (директор): заменить / удалить
+        head+='<div class="acts" style="margin-top:6px;gap:8px;">'
+          +'<button onclick="invReplace(\''+esc(x.id)+'\')" style="'+MINIBTN+'">🔁 заменить</button>'
+          +'<button onclick="invDelete(\''+esc(x.id)+'\')" title="удалить счёт" style="'+MINIBTN+'color:#c0392b;">🗑 удалить</button></div>';
+      }
     }
     return head+'</div>';
   }).join('');
