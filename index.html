@@ -90,7 +90,7 @@
     <div class="fld"><label>Дата оплаты</label><input id="paydate" type="date"></div>
   </div>
   <div class="fld"><label>Сумма, BYN</label><input id="sum" type="number" step="0.01" inputmode="decimal"></div>
-  <div class="fld"><label>Файл (PDF / фото / docx / xlsx)</label><input id="file" type="file"></div>
+  <div class="fld"><label>Файл (PDF / фото / docx / xlsx)</label><input id="file" type="file" onchange="recognizeInvoice()"><div class="hint" style="margin-top:4px">Выберите файл — номер, дата, сумма и поставщик заполнятся сами.</div></div>
   <div class="fld"><label>Комментарий</label><input id="note"></div>
   <button id="send" onclick="submitForm()">Отправить на одобрение</button>
   <div class="msg" id="msg"></div>
@@ -359,6 +359,32 @@ function initSubmit(){
   if(EXEC_URL.indexOf('exec')>=0){ var s=document.createElement('script'); s.src=EXEC_URL+'?contractors=1&cb=fillContractors&t='+Date.now(); document.body.appendChild(s); }
 }
 function setMsg(t,c){ var m=document.getElementById('msg'); m.textContent=t; m.className='msg '+(c||''); }
+// распознать счёт при выборе файла → заполнить поставщика, №, дату, сумму
+function recognizeInvoice(){
+  var fi=document.getElementById('file'); var f=fi&&fi.files&&fi.files[0]; if(!f) return;
+  if(f.size>15*1024*1024){ setMsg('Файл больше 15 МБ','err'); return; }
+  if(!initData()){ setMsg('Откройте через бота','err'); return; }
+  setMsg('🔍 Распознаю счёт…');
+  var rd=new FileReader();
+  rd.onload=function(){
+    var b64=String(rd.result).split(',')[1];
+    var body=new URLSearchParams();
+    body.set('kind','inrecognize'); body.set('initData',initData());
+    body.set('fileB64',b64); body.set('fileMime',f.type||''); body.set('fileName',f.name||'');
+    fetch(EXEC_URL,{method:'POST',body:body}).then(function(r){return r.json();}).then(function(res){
+      if(!res||!res.ok){ setMsg('Не распознал ('+((res&&res.error)||'ошибка')+') — заполните вручную','err'); return; }
+      var fl=res.fields||{};
+      if(fl.contr) document.getElementById('contr').value=fl.contr;
+      if(fl.docNo) document.getElementById('docno').value=fl.docNo;
+      if(fl.dateIso) document.getElementById('docdate').value=fl.dateIso;
+      if(fl.sum) document.getElementById('sum').value=fl.sum;
+      var t=document.getElementById('type'); if(t) t.value=(/акт/i.test(fl.type||'')?'акт':'счёт');
+      setMsg('✅ Распознано — проверьте и отправьте','ok');
+    }).catch(function(){ setMsg('Ошибка распознавания — заполните вручную','err'); });
+  };
+  rd.onerror=function(){ setMsg('Не прочитать файл','err'); };
+  rd.readAsDataURL(f);
+}
 function submitForm(){
   var contr=val('contr'), sum=num(val('sum'));
   if(!contr){ setMsg('Укажите контрагента','err'); return; }
