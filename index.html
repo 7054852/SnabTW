@@ -677,13 +677,19 @@ function invCheckBalance(id, sum, wallet){
   s.src=EXEC_URL+'?inbalance=1&date='+encodeURIComponent(date)+'&sum='+encodeURIComponent(sum)+'&wallet='+encodeURIComponent(wallet||'ООО BYN')+'&cb='+cb+'&initData='+encodeURIComponent(initData())+'&t='+Date.now();
   document.body.appendChild(s);
 }
-function invApprove(id){
+function invApprove(id){ invApproveDo(id,false); }
+function invApproveDo(id,force){
   var statya=val('ivs_'+id);
   if(!statya){ invMsg('Укажите статью расхода — без неё одобрить нельзя.','err'); var f=document.getElementById('ivs_'+id); if(f) f.focus(); return; }
-  invMsg('Одобряю...');
-  clearH(); setH('kind','approve'); setH('initData',initData()); setH('id',id);
-  setH('payDateIso',val('ivd_'+id)); setH('statya',statya);
-  submitHidden(); fade('iv_'+id); setTimeout(function(){ loadInvoices(true); },1600);
+  invMsg(force?'Провожу повторно...':'Одобряю...');
+  window.onApprove=function(r){
+    if(r&&r.dup){ if(confirm(r.error||'Похоже, счёт уже одобрен. Провести ещё раз?')) invApproveDo(id,true); else invMsg('Отменено'); return; }
+    if(r&&r.ok===false){ invMsg('Не одобрено: '+((r&&r.error)||'ошибка'),'err'); return; }
+    invMsg('Одобрено'); fade('iv_'+id); loadInvoices(true);
+  };
+  jsonp('inapprove=1&id='+encodeURIComponent(id)+'&payDateIso='+encodeURIComponent(val('ivd_'+id))
+        +'&statya='+encodeURIComponent(statya)+(force?'&force=1':'')+'&cb=onApprove',
+        function(){ invMsg('Сеть недоступна','err'); });
 }
 function invReject(id){
   if(!confirm('Отклонить счёт?'))return;
