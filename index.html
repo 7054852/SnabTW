@@ -255,6 +255,32 @@ function fmt(n){ return (Number(n)||0).toLocaleString('ru-RU',{minimumFractionDi
 function human(iso){ if(!iso) return ''; var p=iso.split('-'); return p.length===3?(p[2]+'.'+p[1]+'.'+p[0]):iso; }
 function setH(id,v){ var el=document.getElementById('h_'+id); if(el) el.value=(v==null?'':v); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// свой ввод текста вместо window.prompt() — prompt заблокирован в Telegram Desktop (на мобильном работает, на ПК — нет)
+function uiPrompt(title, defval, cb){
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  var card=document.createElement('div');
+  card.style.cssText='background:#fff;border-radius:14px;max-width:440px;width:100%;padding:16px;box-shadow:0 12px 44px rgba(0,0,0,.28);';
+  var lbl=document.createElement('div'); lbl.textContent=title;
+  lbl.style.cssText='font-size:14px;font-weight:600;color:#2b2f36;margin-bottom:10px;line-height:1.35;';
+  var inp=document.createElement('input'); inp.type='text'; inp.value=(defval==null?'':defval);
+  inp.style.cssText='width:100%;box-sizing:border-box;padding:10px 12px;font-size:15px;border:1px solid #d3d7dd;border-radius:9px;outline:none;';
+  var rowb=document.createElement('div'); rowb.style.cssText='display:flex;gap:8px;justify-content:flex-end;margin-top:14px;';
+  var cancel=document.createElement('button'); cancel.textContent='Отмена';
+  cancel.style.cssText='padding:9px 16px;font-size:14px;border:0;border-radius:9px;background:#eef0f3;color:#4a5060;cursor:pointer;';
+  var ok=document.createElement('button'); ok.textContent='Сохранить';
+  ok.style.cssText='padding:9px 16px;font-size:14px;font-weight:600;border:0;border-radius:9px;background:#2e7d32;color:#fff;cursor:pointer;';
+  var done=false;
+  function close(v){ if(done) return; done=true; if(ov.parentNode) document.body.removeChild(ov); cb(v); }
+  cancel.onclick=function(){ close(null); };
+  ok.onclick=function(){ close(inp.value); };
+  ov.onclick=function(e){ if(e.target===ov) close(null); };
+  inp.addEventListener('keydown',function(e){ if(e.key==='Enter') ok.onclick(); else if(e.key==='Escape') cancel.onclick(); });
+  rowb.appendChild(cancel); rowb.appendChild(ok);
+  card.appendChild(lbl); card.appendChild(inp); card.appendChild(rowb);
+  ov.appendChild(card); document.body.appendChild(ov);
+  setTimeout(function(){ try{ inp.focus(); inp.select(); }catch(e){} },30);
+}
 var VIEWS=['menuView','submitView','cashView','approveView','cashApproveView','mineView','invoicesView','invAddView','docsView','docAddView','docEditView','productionView'];
 function show(id){ VIEWS.forEach(function(v){ document.getElementById(v).style.display=(v===id?'block':'none'); }); }
 // число-уведомление на кнопке меню (красный кружок справа)
@@ -672,15 +698,16 @@ function invDelete(id){
   submitHidden(); fade('iv_'+id); setTimeout(function(){ loadInvoices(true); },1600);
 }
 function invEditName(id,cur){
-  var name=prompt('Имя поставщика (форма + название в кавычках, напр. ОАО "Абразивхимсбыт"):', cur||'');
-  if(name===null) return; name=name.trim(); if(!name){ invMsg('Пустое имя','err'); return; }
-  invMsg('Сохраняю имя...');
-  window.onSetContr=function(r){
-    if(r&&r.ok!==false){ invMsg('Имя сохранено'); loadInvoices(true); }
-    else { invMsg('Не сохранилось: '+((r&&r.error)||'ошибка'),'err'); }
-  };
-  jsonp('insetcontr=1&id='+encodeURIComponent(id)+'&contr='+encodeURIComponent(name)+'&cb=onSetContr',
-        function(){ invMsg('Сеть недоступна','err'); });
+  uiPrompt('Имя поставщика (форма + название в кавычках, напр. ОАО "Абразивхимсбыт"):', cur||'', function(name){
+    if(name===null) return; name=String(name).trim(); if(!name){ invMsg('Пустое имя','err'); return; }
+    invMsg('Сохраняю имя...');
+    window.onSetContr=function(r){
+      if(r&&r.ok!==false){ invMsg('Имя сохранено'); loadInvoices(true); }
+      else { invMsg('Не сохранилось: '+((r&&r.error)||'ошибка'),'err'); }
+    };
+    jsonp('insetcontr=1&id='+encodeURIComponent(id)+'&contr='+encodeURIComponent(name)+'&cb=onSetContr',
+          function(){ invMsg('Сеть недоступна','err'); });
+  });
 }
 function invReplace(id){
   if(!confirm('Заменить счёт на новый? Старый удалится, откроется форма загрузки нового.'))return;
