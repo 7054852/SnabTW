@@ -675,8 +675,12 @@ function invEditName(id,cur){
   var name=prompt('Имя поставщика (форма + название в кавычках, напр. ОАО "Абразивхимсбыт"):', cur||'');
   if(name===null) return; name=name.trim(); if(!name){ invMsg('Пустое имя','err'); return; }
   invMsg('Сохраняю имя...');
-  clearH(); setH('kind','insetcontr'); setH('initData',initData()); setH('id',id); setH('contr',name);
-  submitHidden(); setTimeout(function(){ loadInvoices(true); },1200);
+  window.onSetContr=function(r){
+    if(r&&r.ok!==false){ invMsg('Имя сохранено'); loadInvoices(true); }
+    else { invMsg('Не сохранилось: '+((r&&r.error)||'ошибка'),'err'); }
+  };
+  jsonp('insetcontr=1&id='+encodeURIComponent(id)+'&contr='+encodeURIComponent(name)+'&cb=onSetContr',
+        function(){ invMsg('Сеть недоступна','err'); });
 }
 function invReplace(id){
   if(!confirm('Заменить счёт на новый? Старый удалится, откроется форма загрузки нового.'))return;
