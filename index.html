@@ -432,12 +432,27 @@ function submitForm(){
   if(sum<=0){ setMsg('Укажите сумму','err'); return; }
   if(!initData()){ setMsg('Откройте через бота','err'); return; }
   document.getElementById('send').disabled=true; setMsg('Отправляю...');
-  clearH(); setH('kind','submit'); setH('initData',initData());
-  setH('contr',contr); setH('type',val('type')); setH('docNo',val('docno'));
-  setH('docDateIso',val('docdate')); setH('sum',sum); setH('payDateIso',val('paydate'));
-  setH('wallet','ООО BYN'); setH('note',val('note'));
-  withFile('file', function(){ submitHidden(); setMsg('Готово! Счёт отправлен.','ok'); resetSubmitForm(); if(ROLE.canApprove) bumpBtnBadge('btnApproveInv'); setTimeout(function(){ show('menuView'); },1000); setTimeout(function(){ refreshRole(true); },2500); },
-                   function(m){ setMsg(m,'err'); document.getElementById('send').disabled=false; });
+  // ⚠ Раньше счёт уходил «вслепую» (скрытая форма в невидимый iframe) — ответ сервера никто
+  // не читал, и при отказе пользователь всё равно видел «Готово». Теперь ждём ответ.
+  var body=new URLSearchParams();
+  body.set('kind','submit'); body.set('initData',initData());
+  body.set('contr',contr); body.set('type',val('type')); body.set('docNo',val('docno'));
+  body.set('docDateIso',val('docdate')); body.set('sum',String(sum)); body.set('payDateIso',val('paydate'));
+  body.set('wallet','ООО BYN'); body.set('note',val('note'));
+  readFile('file', function(f){
+    if(f){ body.set('fileB64',f.b64); body.set('fileName',f.name); body.set('fileMime',f.mime); }
+    fetch(EXEC_URL,{method:'POST',body:body}).then(function(r){ return r.json(); }).then(function(res){
+      document.getElementById('send').disabled=false;
+      if(!res||!res.ok){ setMsg((res&&res.error)||'Счёт не принят','err'); return; }
+      setMsg('Готово! Счёт отправлен.','ok'); resetSubmitForm();
+      if(ROLE.canApprove) bumpBtnBadge('btnApproveInv');
+      setTimeout(function(){ show('menuView'); },1000);
+      setTimeout(function(){ refreshRole(true); },2500);
+    }).catch(function(e){
+      document.getElementById('send').disabled=false;
+      setMsg('Связь оборвалась — счёт не отправлен. Повторите','err');
+    });
+  }, function(m){ setMsg(m,'err'); document.getElementById('send').disabled=false; });
 }
 
 /* ===== НАЛИЧНЫЙ ОТЧЁТ ===== */
@@ -993,6 +1008,16 @@ function setSelect(id,val){
   var o=document.createElement('option'); o.value=val; o.textContent=val; s.appendChild(o); s.value=val;
 }
 
+function readFile(inputId, ok, err){
+  var fi=document.getElementById(inputId);
+  if(!(fi && fi.files && fi.files[0])){ ok(null); return; }
+  var f=fi.files[0];
+  if(f.size>15*1024*1024){ err('Файл больше 15 МБ — уменьшите'); return; }
+  var rd=new FileReader();
+  rd.onload=function(){ ok({ b64:String(rd.result).split(',')[1]||'', name:f.name, mime:f.type||'application/octet-stream' }); };
+  rd.onerror=function(){ err('Не удалось прочитать файл'); };
+  rd.readAsDataURL(f);
+}
 function withFile(inputId, ok, err){
   var fi=document.getElementById(inputId);
   if(fi.files && fi.files[0]){
