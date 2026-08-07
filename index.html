@@ -81,10 +81,10 @@
   <div class="fld"><label>Контрагент</label><input id="contr" list="contrList" placeholder="Поставщик" autocomplete="off"><datalist id="contrList"></datalist></div>
   <div class="two">
     <div class="fld"><label>Тип</label><select id="type"><option>счёт</option><option>акт</option></select></div>
-    <div class="fld"><label>№ документа</label><input id="docno"></div>
+    <div class="fld"><label>№ документа <span style="color:#c0392b">*</span></label><input id="docno" required></div>
   </div>
   <div class="two">
-    <div class="fld"><label>Дата документа</label><input id="docdate" type="date"></div>
+    <div class="fld"><label>Дата документа <span style="color:#c0392b">*</span></label><input id="docdate" type="date" required></div>
     <div class="fld"><label>Дата оплаты</label><input id="paydate" type="date"></div>
   </div>
   <div class="fld"><label>Сумма, BYN</label><input id="sum" type="number" step="0.01" inputmode="decimal"></div>
@@ -425,6 +425,10 @@ function recognizeInvoice(){
 function submitForm(){
   var contr=val('contr'), sum=num(val('sum'));
   if(!contr){ setMsg('Укажите контрагента','err'); return; }
+  // № и дата обязательны: без них счёт не с чем сверить при оплате и он ловит чужой
+  // статус «оплачен» по совпадению «поставщик + сумма»
+  if(!val('docno')){ setMsg('Укажите номер счёта','err'); try{ document.getElementById('docno').focus(); }catch(e){} return; }
+  if(!val('docdate')){ setMsg('Укажите дату счёта','err'); try{ document.getElementById('docdate').focus(); }catch(e){} return; }
   if(sum<=0){ setMsg('Укажите сумму','err'); return; }
   if(!initData()){ setMsg('Откройте через бота','err'); return; }
   document.getElementById('send').disabled=true; setMsg('Отправляю...');
