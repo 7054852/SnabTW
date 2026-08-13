@@ -929,8 +929,9 @@ function onTgDiag(r){
   if(!r){ el.textContent='нет ответа'; return; }
   if(r.error){ el.innerHTML='<span style="color:#c0392b">'+esc(r.error)+'</span>'
     +' · бот '+esc(r.bot||'?')+' · чат <code>'+esc(r.chat||'—')+'</code>'; return; }
-  el.innerHTML='<span style="color:#137333">✓ связь есть</span> · бот '+esc(r.bot||'')
-    +' · «'+esc(r.chatTitle||'')+'» ('+esc(r.chatType||'')+')';
+  el.innerHTML='<span style="color:#137333">✓ связь есть, тестовое сообщение ушло</span> · бот '+esc(r.bot||'')
+    +' · «'+esc(r.chatTitle||'')+'»'
+    +(r.migrated?(' · <b>адрес группы обновлён</b> (стала супергруппой)'):'');
 }
 function docSendSelected(){
   var rows=Object.keys(docChecked); if(!rows.length) return;
@@ -959,7 +960,7 @@ function docSendSelected(){
       docChecked={}; docLoading=false; loadDocs(true); return;
     }
     if(!res||!res.ok){ docsMsg((res&&res.error)||'Ошибка отправки','err'); return; }
-    docsMsg('Отправлено бухгалтеру: '+(res.sent||0),'ok');
+    docsMsg('Отправлено бухгалтеру: '+(res.sent||0)+(res.migrated?' · адрес группы обновлён (стала супергруппой)':''),'ok');
     docChecked={}; docLoading=false; loadDocs(true);
   }).catch(function(e){ btn.disabled=false; docsMsg('Ошибка сети: '+e.message,'err'); });
 }
