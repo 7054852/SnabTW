@@ -168,6 +168,7 @@
   <button class="green" onclick="showDocAdd()" style="margin-bottom:10px;">➕ Добавить документ</button>
   <div id="docQueueBar" class="hint" style="display:none;margin-bottom:8px;color:#1a73e8;font-weight:600;"></div>
   <div id="docSendBar" style="display:none;margin-bottom:10px;"><button id="docSendBtn" class="green" onclick="docSendSelected()" style="background:#1a73e8;">📤 Отправить бухгалтеру</button></div>
+  <div style="margin-bottom:10px;"><button class="gray" onclick="tgDiag()" style="font-size:13px;padding:6px 12px;">🔍 Проверить связь с группой бухгалтера</button><span id="diagMsg" class="hint" style="margin-left:8px;"></span></div>
   <input id="docSearch" placeholder="🔍 Поиск: контрагент, №, товар, сумма" oninput="docSearchInput()" style="margin-bottom:8px;">
   <div class="doctabs" style="display:flex;gap:6px;margin-bottom:8px;">
     <button id="tabAdded" class="dtab active" onclick="setDocSort('added')">Новые</button>
@@ -881,12 +882,14 @@ function renderDocs(){
     var errst=(d.status==='ошибка');
     var sel=!!docChecked[d.row];
     var file=d.file?'<a class="flink" href="'+esc(d.file)+'" target="_blank">файл</a>':'<span class="hint">нет файла</span>';
-    var status = sent?'<span class="st-sent">✓ отправлен</span>'
+    var status = sent?('<span class="st-sent">✓ отправлен</span>'+(d.err?(' <span class="st-err">· '+esc(d.err)+'</span>'):''))
                : queue?'<span class="st-queue">⏳ '+esc(d.status)+'</span>'
                : errst?'<span class="st-err">⚠ ошибка распознавания</span>'
                : '<span class="st-check">● на проверке</span>';
     // галочку и удаление — только для готовых к отправке (на проверке); в очереди/отправленным нельзя
-    var canPick=(!sent && !queue);
+    // ⚠ Отправленные тоже можно выбрать: статус «отправлен» ставился даже когда Telegram
+    // документ отклонял, и в группу ничего не приходило. Повторная отправка обязана быть.
+    var canPick=(!queue);
     var pick=canPick?'<label class="pick" onclick="event.stopPropagation()"><input type="checkbox" '+(sel?'checked':'')+' onchange="toggleDoc('+d.row+',this.checked)"></label>':'<span class="pick" style="width:22px;"></span>';
     var trash=(!sent&&!queue)?'<div class="docactions"><button class="trash" onclick="event.stopPropagation();docDelete('+d.row+')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/><path d="M10 11v5M14 11v5"/></svg>удалить</button></div>':'';
     var cls='doccard'+(sent?' sent':'')+(sel?' sel':'')+(queue?' queue':'')+(d.dup?' dup':'');
@@ -915,6 +918,20 @@ function updateDocSendBar(){
   bar.style.display=n?'block':'none';
   var b=document.getElementById('docSendBtn'); if(b) b.textContent='📤 Отправить бухгалтеру ('+n+')';
 }
+// проверка канала: жив ли бот и видит ли он группу бухгалтера.
+// Токен наружу не отдаётся — только имя бота и описание ошибки от Telegram.
+function tgDiag(){
+  var el=document.getElementById('diagMsg'); el.textContent='проверяю…';
+  jsonp('tgdiag=1&cb=onTgDiag', function(){ el.textContent='сеть недоступна'; });
+}
+function onTgDiag(r){
+  var el=document.getElementById('diagMsg'); if(!el) return;
+  if(!r){ el.textContent='нет ответа'; return; }
+  if(r.error){ el.innerHTML='<span style="color:#c0392b">'+esc(r.error)+'</span>'
+    +' · бот '+esc(r.bot||'?')+' · чат <code>'+esc(r.chat||'—')+'</code>'; return; }
+  el.innerHTML='<span style="color:#137333">✓ связь есть</span> · бот '+esc(r.bot||'')
+    +' · «'+esc(r.chatTitle||'')+'» ('+esc(r.chatType||'')+')';
+}
 function docSendSelected(){
   var rows=Object.keys(docChecked); if(!rows.length) return;
   if(!initData()){ docsMsg('Откройте через бота','err'); return; }
@@ -923,6 +940,10 @@ function docSendSelected(){
   body.set('kind','docsend'); body.set('initData',initData()); body.set('rows',rows.join(','));
   fetch(EXEC_URL,{method:'POST',body:body}).then(function(r){return r.json();}).then(function(res){
     btn.disabled=false;
+    if(res&&res.failed&&res.failed.length){
+      docsMsg('Ушло: '+(res.sent||0)+'. Не ушло: '+res.failed.length+' — '+(res.failed[0].error||''),'err');
+      docChecked={}; docLoading=false; loadDocs(true); return;
+    }
     if(!res||!res.ok){ docsMsg((res&&res.error)||'Ошибка отправки','err'); return; }
     docsMsg('Отправлено бухгалтеру: '+(res.sent||0),'ok');
     docChecked={}; docLoading=false; loadDocs(true);
