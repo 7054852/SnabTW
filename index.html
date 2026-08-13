@@ -935,11 +935,25 @@ function onTgDiag(r){
 function docSendSelected(){
   var rows=Object.keys(docChecked); if(!rows.length) return;
   if(!initData()){ docsMsg('Откройте через бота','err'); return; }
+  // среди выбранных есть помеченные «отправлен»? Спрашиваем и шлём принудительно —
+  // иначе сервер их молча пропустит и отчитается «Отправлено: 0», что читается как успех.
+  var again=0;
+  docItems.forEach(function(d){ if(docChecked[d.row] && d.status==='отправлен') again++; });
+  var force=0;
+  if(again){
+    if(!confirm(again+' документ(ов) уже помечены отправленными.\nОтправить их бухгалтеру ПОВТОРНО?')) return;
+    force=1;
+  }
   var btn=document.getElementById('docSendBtn'); btn.disabled=true; docsMsg('Отправляю бухгалтеру...');
   var body=new URLSearchParams();
   body.set('kind','docsend'); body.set('initData',initData()); body.set('rows',rows.join(','));
+  if(force) body.set('force','1');
   fetch(EXEC_URL,{method:'POST',body:body}).then(function(r){return r.json();}).then(function(res){
     btn.disabled=false;
+    if(res&&res.skipped&&res.skipped.length&&!res.sent){
+      docsMsg('Ничего не ушло: '+res.skipped.length+' уже помечены отправленными. Нажмите ещё раз и подтвердите повтор.','err');
+      btn.disabled=false; return;
+    }
     if(res&&res.failed&&res.failed.length){
       docsMsg('Ушло: '+(res.sent||0)+'. Не ушло: '+res.failed.length+' — '+(res.failed[0].error||''),'err');
       docChecked={}; docLoading=false; loadDocs(true); return;
