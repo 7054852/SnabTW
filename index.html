@@ -503,7 +503,7 @@ function renderInbox(items){
     return '<div class="card" id="ap_'+esc(x.id)+'"><div class="top"><span class="nm">'+esc(x.contr||'—')+'</span><span class="nm">'+fmt(x.sum)+'</span></div>'
       +'<div class="sm">'+esc(x.type||'счёт')+(x.docNo?(' №'+esc(x.docNo)):'')+' · '+file+'</div>'
       +'<div class="row2"><span class="hint">оплатить:</span><input type="date" id="apd_'+esc(x.id)+'" value="'+esc(x.payDateIso||'')+'">'
-      +'<span class="fc" style="color:'+col+';">остаток: '+fmt(x.afterPay)+'</span></div>'
+      +'<span class="fc" style="color:'+col+';">на всех счетах после оплаты: '+fmt(x.afterPay)+'</span></div>'
       +'<div class="fld" style="margin-top:8px;"><label>Статья расхода (обязательно)</label><input id="aps_'+esc(x.id)+'" list="apsl_'+esc(x.id)+'" placeholder="поиск статьи" autocomplete="off">'+statyaListHtml('apsl_'+esc(x.id))+'</div>'
       +'<div class="acts"><button class="green" onclick="approve(\''+esc(x.id)+'\')">Одобрить</button><button class="redb" onclick="reject(\''+esc(x.id)+'\')">Отклонить</button></div></div>';
   }).join('');
