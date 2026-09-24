@@ -537,7 +537,7 @@ function renderCashApprove(items){
 }
 function caOk(id){ caMsg('Подтверждаю...'); actCash('cashok',id); fade('ca_'+id); setTimeout(loadCashApprove,1400); }
 function caNo(id){ if(!confirm('Отклонить отчёт? Сотрудник подаст заново.'))return; caMsg('Отклоняю...'); actCash('cashno',id); fade('ca_'+id); setTimeout(loadCashApprove,1400); }
-function actCash(kind,id){ clearH(); setH('kind',kind); setH('initData',initData()); setH('id',id); submitHidden(); }
+function actCash(kind,id){ postAct({kind:kind,id:id}, function(r){ if(!r.ok){ caMsg('Не выполнено: '+(r.error||'ошибка'),'err'); var c=document.getElementById('ca_'+id); if(c) c.style.opacity=''; } }); }
 
 /* ===== МОИ ОТЧЁТЫ ===== */
 function myMsg(t,c){ var m=document.getElementById('myMsg'); m.textContent=t; m.className='msg '+(c||''); }
@@ -714,14 +714,12 @@ function invApproveDo(id,force){
 function invReject(id){
   if(!confirm('Отклонить счёт?'))return;
   invMsg('Отклоняю...');
-  clearH(); setH('kind','reject'); setH('initData',initData()); setH('id',id);
-  submitHidden(); fade('iv_'+id); setTimeout(function(){ loadInvoices(true); },1600);
+  fade('iv_'+id); postAct({kind:'reject',id:id}, function(r){ if(!r.ok) invMsg('Не выполнено: '+(r.error||'ошибка'),'err'); else invMsg(''); loadInvoices(true); });
 }
 function invDelete(id){
   if(!confirm('Удалить счёт из системы? Если он уже одобрен — удалится и созданная запись расхода (если не оплачена).'))return;
   invMsg('Удаляю...');
-  clearH(); setH('kind','indelete'); setH('initData',initData()); setH('id',id);
-  submitHidden(); fade('iv_'+id); setTimeout(function(){ loadInvoices(true); },1600);
+  fade('iv_'+id); postAct({kind:'indelete',id:id}, function(r){ if(!r.ok) invMsg('Не удалён: '+(r.error||'ошибка'),'err'); else invMsg(''); loadInvoices(true); });
 }
 function invEditName(id,cur){
   uiPrompt('Имя поставщика (форма + название в кавычках, напр. ОАО "Абразивхимсбыт"):', cur||'', function(name){
@@ -738,14 +736,18 @@ function invEditName(id,cur){
 function invReplace(id){
   if(!confirm('Заменить счёт на новый? Старый удалится, откроется форма загрузки нового.'))return;
   invMsg('Удаляю старый...');
-  clearH(); setH('kind','indelete'); setH('initData',initData()); setH('id',id);
-  submitHidden(); fade('iv_'+id);
-  setTimeout(function(){ invMsg(''); showSubmit(); },1400);
+  fade('iv_'+id); postAct({kind:'indelete',id:id}, function(r){
+    if(!r.ok){ invMsg('Старый счёт не удалён: '+(r.error||'ошибка'),'err'); var c=document.getElementById('iv_'+id); if(c) c.style.opacity=''; return; }   // иначе получался дубль счёта
+    invMsg(''); showSubmit(); });
 }
 
 /* ===== общее ===== */
 function clearH(){ ['kind','contr','type','docNo','docDateIso','sum','payDateIso','wallet','note','cat','name','reimburse','spender','fileB64','fileName','fileMime','statya','dateIso','cur','id','orderId','status'].forEach(function(f){ setH(f,''); }); }
 function submitHidden(){ var f=document.getElementById('hform'); f.action=EXEC_URL; f.submit(); }
+// действие с ответом: раньше отклонение/удаление шло в невидимый iframe, и «Нет доступа» выглядело как «Готово»
+function postAct(fields, cb){ var b=new URLSearchParams(); Object.keys(fields).forEach(function(k){ b.set(k,fields[k]); }); b.set('initData',initData());
+  fetch(EXEC_URL,{method:'POST',body:b}).then(function(r){ return r.json(); }).then(function(res){ cb(res||{ok:false,error:'пустой ответ'}); })
+    .catch(function(){ cb({ok:false,error:'связь оборвалась — повторите'}); }); }
 function fade(id){ var c=document.getElementById(id); if(c) c.style.opacity='0.4'; }
 function jsonp(qs, onerr){ var s=document.createElement('script'); s.onerror=onerr; s.src=EXEC_URL+'?'+qs+'&initData='+encodeURIComponent(initData())+'&t='+Date.now(); document.body.appendChild(s); }
 /* ===== ДОКУМЕНТЫ (директор) ===== */
