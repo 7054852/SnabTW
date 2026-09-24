@@ -103,7 +103,8 @@
     <div class="fld"><label>Сумма, BYN</label><input id="c_sum" type="number" step="0.01" inputmode="decimal"></div>
     <div class="fld"><label>Статья</label><input id="c_cat" list="c_catList" placeholder="поиск статьи" autocomplete="off"><datalist id="c_catList"></datalist></div>
   </div>
-  <div class="fld"><label>Наличный кошелёк</label><select id="c_wallet"><option></option></select></div>
+  <label class="fld" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="c_reimb" onchange="cReimbToggle()" style="width:auto"> Платил своими деньгами — возместить мне</label>
+  <div class="fld" id="c_wallet_box"><label>Наличный кошелёк</label><select id="c_wallet"><option></option></select></div>
   <div class="fld"><label>На что (назначение)</label><input id="c_name" placeholder="напр. хоз-нужды"></div>
   <div class="fld"><label>Чек (фото / PDF) — если есть</label><input id="c_file" type="file"></div>
   <div class="fld"><label>Комментарий</label><input id="c_note"></div>
@@ -342,6 +343,7 @@ function resetSubmitForm(){
 }
 function resetCashForm(){
   ['c_sum','c_cat','c_name','c_note'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  var rb=document.getElementById('c_reimb'); if(rb){ rb.checked=false; cReimbToggle(); }
   document.getElementById('c_send').disabled=false;
 }
 
@@ -466,16 +468,18 @@ function initCash(){
   };
   if(EXEC_URL.indexOf('exec')>=0){ var s=document.createElement('script'); s.src=EXEC_URL+'?cashmeta=1&cb=onCashMeta&t='+Date.now(); document.body.appendChild(s); }
 }
+function cReimbToggle(){ var on=document.getElementById('c_reimb').checked; document.getElementById('c_wallet_box').style.display=on?'none':''; }
 function cMsg(t,c){ var m=document.getElementById('cMsg'); m.textContent=t; m.className='msg '+(c||''); }
 function cashSubmit(){
   var sum=num(val('c_sum'));
   if(sum<=0){ cMsg('Укажите сумму','err'); return; }
-  if(!val('c_wallet')){ cMsg('Выберите наличный кошелёк','err'); return; }
+  var reimb=document.getElementById('c_reimb').checked;
+  if(!reimb && !val('c_wallet')){ cMsg('Выберите наличный кошелёк','err'); return; }
   if(!val('c_cat')){ cMsg('Укажите статью','err'); return; }
   if(!initData()){ cMsg('Откройте через бота','err'); return; }
   document.getElementById('c_send').disabled=true; cMsg('Отправляю...');
   clearH(); setH('kind','cash'); setH('initData',initData());
-  setH('sum',sum); setH('cat',val('c_cat')); setH('wallet',val('c_wallet'));
+  setH('sum',sum); setH('cat',val('c_cat')); setH('wallet',reimb?'':val('c_wallet')); setH('reimburse',reimb?'1':'');
   setH('name',val('c_name')); setH('note',val('c_note'));
   withFile('c_file', function(){ submitHidden(); cMsg('Готово! Отправлено.','ok'); resetCashForm(); setTimeout(function(){ show('menuView'); },1000); setTimeout(function(){ refreshRole(true); },2500); },
                      function(m){ cMsg(m,'err'); document.getElementById('c_send').disabled=false; });
