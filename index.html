@@ -246,7 +246,10 @@
 
 <script>
 /* ВПИШИ СЮДА свой адрес веб-приложения, заканчивается на /exec */
-var EXEC_URL = "https://script.google.com/macros/s/AKfycbxKBO433vS7HhZHYX6nzZiR8c72tjfzGagb2m7kZVfDllNuYPZajqz5DndzcRyBI7ZB/exec";
+// М6: деньги и счета ведёт Прохаб. Адрес — совместимый вход Прохаба: счета обрабатывает он, остальное (документы, распознавание) сам передаёт в «Финансовый гений».
+// Откат — вернуть прежний адрес: https://script.google.com/macros/s/AKfycbxKBO433vS7HhZHYX6nzZiR8c72tjfzGagb2m7kZVfDllNuYPZajqz5DndzcRyBI7ZB/exec
+var EXEC_URL = "https://prohub.tigerwood.by/fin/exec";
+if (/[?&]srv=staging(&|$)/.test(location.search)) EXEC_URL = "https://prohub-staging.tigerwood.by/fin/exec";   // репетиция на тестовом сервере
 
 var tg = window.Telegram ? window.Telegram.WebApp : null;
 if (tg) { tg.ready(); tg.expand(); }
