@@ -319,7 +319,7 @@ function applyRole(r, silent){
     document.getElementById('btnApproveCash').style.display = r.canApprove?'block':'none';
     document.getElementById('btnDocs').style.display = r.canApprove?'block':'none';
     document.getElementById('btnMine').style.display = (r.canSubmit && !r.canApprove)?'block':'none';
-    document.getElementById('btnProd').style.display = (r.canSubmit || r.canApprove)?'block':'none';
+    var bp=document.getElementById('btnProd'); if(bp) bp.style.display = (r.canSubmit || r.canApprove)?'block':'none';   // кнопки нет с 13.10.2026
     setBtnBadge('btnInvoices','📋 Счета', r.pendingInv||0);   // значок = сколько ждут одобрения
     if(r.canApprove){ setBtnBadge('btnApproveCash','✅ Наличные отчёты', r.pendingCash||0); }
     if(r.docTypes && r.docTypes.length){ DOC_TYPES=r.docTypes; buildTypeSelect(); }
